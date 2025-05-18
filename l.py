@@ -215,18 +215,18 @@ class LBM_functions:
             f_vec = wp.vec(length=Q, dtype=sim_dtype)
             for q in range(Q):
                 pull_ngh = wp.vec3i(0, 0, 0)
-                f_vec[q] = f_mem[q]
-
+                outside_domain = False
                 for d in range(D):
                     pull_ngh[d] = index[d] - c_dev[d, q]
-
                     # impose periodicity for out of bound values
-                    if pull_ngh[d] < 0:
-                        pull_ngh[d] = f_mem.shape[d + 1] - 1
-                    elif pull_ngh[d] >= f_mem.shape[d + 1]:
-                        pull_ngh[d] = 0
-
-                f_vec[q] = f_mem[q, pull_ngh[0], pull_ngh[1], pull_ngh[2]]
+                    # if pull_ngh[d] < 0:
+                    #     pull_ngh[d] = f_mem.shape[d + 1] - 1
+                    # elif pull_ngh[d] >= f_mem.shape[d + 1]:
+                    #     pull_ngh[d] = 0
+                    if pull_ngh[d] < 0 or pull_ngh[d] >= f_mem.shape[d + 1]:
+                        outside_domain = True
+                if not outside_domain:
+                    f_vec[q] = f_mem[q, pull_ngh[0], pull_ngh[1]]
 
             return f_vec
 
@@ -275,6 +275,30 @@ class LBM_functions:
         return macroscopic
 
     @staticmethod
+    def get_apply_boundary_conditions():
+        equilibrium_fun = LBM_functions.get_equilibrium()
+
+        @wp.func
+        def apply_boundary_conditions(
+                type: wp.uint8,
+        ):
+            f = wp.vec(length=Q, dtype=sim_dtype)
+            u = wp.vec(length=D, dtype=sim_dtype)
+            rho = wp.vec(length=1, dtype=sim_dtype)
+            rho[0] = sim_dtype(1.0)
+            vel = sim_dtype(0.0)
+
+            if type == bc_lid:
+                vel = sim_dtype(prescribed_vel)
+
+            u[0] = vel
+            u[1] = sim_dtype(0.0)
+
+            f = equilibrium_fun(rho, u)
+            return f
+        return apply_boundary_conditions
+
+    @staticmethod
     def get_kbc():
         # Make constants for warp
         _f_vec = wp.vec(length=Q, dtype=sim_dtype)
@@ -294,7 +318,7 @@ class LBM_functions:
             return pi
 
         @wp.func
-        def decompose_shear_d2q9(fneq: wp.vec(length=Q, dtype=sim_dtype),):
+        def decompose_shear_d2q9(fneq: wp.vec(length=Q, dtype=sim_dtype), ):
             pi = second_moment(fneq)
             N = pi[0] - pi[2]
             s = wp.vec(length=Q, dtype=sim_dtype)
@@ -310,9 +334,9 @@ class LBM_functions:
 
         @wp.func
         def entropic_scalar_product(
-            x: typing.Any,
-            y: typing.Any,
-            feq: typing.Any,
+                x: typing.Any,
+                y: typing.Any,
+                feq: typing.Any,
         ):
             e = wp.cw_div(wp.cw_mul(x, y), feq)
             e_sum = sim_dtype(0.0)
@@ -331,7 +355,7 @@ class LBM_functions:
             fneq = f - feq
 
             shear = decompose_shear_d2q9(fneq)
-            delta_s = shear * rho / sim_dtype(4.0)
+            delta_s = shear * rho[0] / sim_dtype(4.0)
 
             # Compute required constants based on the input omega (omega is the inverse relaxation time)
             _beta = sim_dtype(0.5) * sim_dtype(omega)
@@ -341,12 +365,12 @@ class LBM_functions:
             delta_h = fneq - delta_s
             two = sim_dtype(2.0)
             gamma = _inv_beta - (two - _inv_beta) * entropic_scalar_product(delta_s, delta_h, feq) / (
-                epsilon_dev + entropic_scalar_product(delta_h, delta_h, feq)
+                    epsilon_dev + entropic_scalar_product(delta_h, delta_h, feq)
             )
             fout = f - _beta * (two * delta_s + gamma * delta_h)
 
             return fout
-
+        return kbc
 
 class LBM_kernels:
     @staticmethod
@@ -378,7 +402,44 @@ class LBM_kernels:
                 f_out[l, *index[0], index[1]] = f_eq[l]
 
         return equilibrium
+    @staticmethod
+    def get_collision():
+        equilibrium_fun = LBM_functions.get_equilibrium()
+        macroscopic_fun = LBM_functions.get_macroscopic()
+        kbc_fun = LBM_functions.get_kbc()
 
+        # Construct the warp kernel
+        @wp.kernel
+        def equilibrium(
+                f: wp.array3d(dtype=sim_dtype),
+                omega : sim_dtype,
+        ):
+            # Get the global index
+            i, j = wp.tid()
+            index = wp.vec2i(i, j)
+            # Get the equilibrium
+            u = wp.vector(length=D, dtype=sim_dtype)
+            rho = wp.vector(length=1, dtype=sim_dtype)
+            f_post_stream = wp.vector(length=Q, dtype=sim_dtype)
+
+            for q in range(Q):
+                f_post_stream[q] = f[q, index[0], index[1]]
+
+            mcrpc = macroscopic_fun(f_post_stream)
+            rho[0] = mcrpc[0]
+            u[0] = mcrpc[1]
+            u[1] = mcrpc[2]
+
+            # Compute the equilibrium
+            f_eq = equilibrium_fun(rho, u)
+
+            f_post_collision = kbc_fun(f_post_stream, f_eq, rho, u, omega)
+
+            # Set the output
+            for q in range(Q):
+                f[q, index[0], index[1]] = f_post_collision[q]
+
+        return equilibrium
     @staticmethod
     def get_set_f_to_equilibrium():
         equilibrium_fun = LBM_functions.get_equilibrium()
@@ -412,6 +473,7 @@ class LBM_kernels:
 
     @staticmethod
     def get_pull_stream():
+        pull_stream_fun = LBM_functions.get_pull_stream()
         @wp.kernel
         def pull_stream(
                 f_in: wp.array3d(dtype=sim_dtype),
@@ -420,12 +482,10 @@ class LBM_kernels:
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
-
-            f_post = wp.vector(length=Q, dtype=sim_dtype)
-            LBM_functions.get_pull_stream()(index, f_in, f_post)
+            f_post = pull_stream_fun(index, f_in)
             # Set the output
             for q in range(Q):
-                f_out[q, index[0], index[1], index[2]] = f_post[q]
+                f_out[q, index[0], index[1]] = f_post[q]
 
         return pull_stream
 
@@ -457,6 +517,30 @@ class LBM_kernels:
         return macroscopic
 
     @staticmethod
+    def get_apply_boundary_conditions():
+        apply_boundary_conditions_fun = LBM_functions.get_apply_boundary_conditions()
+
+        @wp.kernel
+        def apply_boundary_conditions(
+                bc_type: wp.array3d(dtype=wp.uint8),
+                f_out: wp.array3d(dtype=sim_dtype),
+        ):
+            # Get the global index
+            i, j = wp.tid()
+            index = wp.vec2i(i, j)
+
+            type = bc_type[0, index[0], index[1]]
+            if type == bc_bulk:
+                return
+
+            f = apply_boundary_conditions_fun(type)
+
+            for q in range(Q):
+                f_out[q, index[0], index[1]] = f[q]
+
+        return apply_boundary_conditions
+
+    @staticmethod
     def get_set_bc():
         @wp.kernel
         def set_bc(
@@ -481,21 +565,33 @@ wp.launch(LBM_kernels.get_set_bc(),
           dim=grid_shape,
           inputs=[bc_type],
           device="cuda")
-
+wp.launch(LBM_kernels.get_set_f_to_equilibrium(),
+          dim=grid_shape,
+          inputs=[bc_type, f_0],
+          device="cuda")
 # ---------------------
 # Main time-stepping
 # ---------------------
-for step in range(1):
-    wp.launch(LBM_kernels.get_set_f_to_equilibrium(),
+for step in range(10):
+    wp.launch(LBM_kernels.get_pull_stream(),
               dim=grid_shape,
-              inputs=[bc_type, f_0],
+              inputs=[f_0, f_1],
+              device="cuda")
+    wp.launch(LBM_kernels.get_apply_boundary_conditions(),
+              dim=grid_shape,
+              inputs=[bc_type, f_1],
               device="cuda")
     wp.launch(LBM_kernels.get_macroscopic(),
               dim=grid_shape,
-              inputs=[f_0, rho, u],
+              inputs=[f_1, rho, u],
               device="cuda")
+    wp.launch(LBM_kernels.get_collision(),
+              dim=grid_shape,
+              inputs=[f_1, omega],
+              device="cuda")
+
     # swap buffers
-    # f, f_temp = f_temp, f
+    f_0, f_1 = f_1, f_0
 
 export_warp_field_to_vti(
     filename="u_0.vti",
