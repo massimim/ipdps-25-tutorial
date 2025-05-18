@@ -13,7 +13,6 @@ import warp as wp
 import numpy as np
 import pyvista as pv
 
-
 def help_construct_opposite_indices(c_host):
     c = c_host.T
     return np.array([c.tolist().index((-c[i]).tolist()) for i in range(Q)])
@@ -46,10 +45,11 @@ def help_construct_lattice_moment(c_host):
     return cc
 
 
+
 # ---------------------
 # Grid and simulation parameters
 # ---------------------
-nx, ny = 128, 128
+nx, ny = 512, 512
 grid_shape = (nx, ny)
 
 num_steps = 2000
@@ -83,6 +83,12 @@ cc_dev = wp.constant(wp.mat((Q, D * (D + 1) // 2), dtype=sim_dtype)(cc_host))
 # self.cc = wp.constant(wp.mat((self.q, self.d * (self.d + 1) // 2), dtype=dtype)(self._cc))
 # self.c_float = wp.constant(wp.mat((self.d, self.q), dtype=dtype)(self._c_float))
 # self.qi = wp.constant(wp.mat((self.q, self.d * (self.d + 1) // 2), dtype=dtype)(self._qi))
+
+
+@wp.struct
+class Marcoscopic:
+    rho: sim_dtype
+    u: wp.vec(length=D, dtype=sim_dtype)
 
 
 def help_create_field(
@@ -174,14 +180,14 @@ u = help_create_field(cardinality=D, dtype=sim_dtype)
 rho = help_create_field(cardinality=1, dtype=sim_dtype)
 
 
+
 # Construct the equilibrium functional
 class LBM_functions:
     @staticmethod
     def get_equilibrium():
         @wp.func
         def equilibrium(
-                rho: wp.vec(1, dtype=sim_dtype),
-                u: wp.vec(D, dtype=sim_dtype),
+                mcrpc: Marcoscopic,
         ):
             f_out = wp.vec(length=Q, dtype=sim_dtype)
 
@@ -191,16 +197,16 @@ class LBM_functions:
                 cu = sim_dtype(0.0)
                 for d in range(D):
                     if c_dev[d, q] == 1:
-                        cu += u[d]
+                        cu += mcrpc.u[d]
                     elif c_dev[d, q] == -1:
-                        cu -= u[d]
+                        cu -= mcrpc.u[d]
                 cu *= sim_dtype(3.0)
 
                 # Compute usqr
-                usqr = sim_dtype(1.5) * wp.dot(u, u)
+                usqr = sim_dtype(1.5) * wp.dot(mcrpc.u, mcrpc.u)
 
                 # Compute feq
-                f_out[q] = rho[0] * w_dev[q] * (sim_dtype(1.0) + cu * (sim_dtype(1.0) + sim_dtype(0.5) * cu) - usqr)
+                f_out[q] = mcrpc.rho * w_dev[q] * (sim_dtype(1.0) + cu * (sim_dtype(1.0) + sim_dtype(0.5) * cu) - usqr)
             return f_out
 
         return equilibrium
@@ -263,13 +269,10 @@ class LBM_functions:
         def macroscopic(
                 f: wp.vec(length=Q, dtype=sim_dtype),
         ):
-            mcrpc = wp.vec(length=4, dtype=sim_dtype)
+            mcrpc = Marcoscopic()
             # Compute the macroscopic variables
-            rho = zero_moment(f, )
-            u = first_moment(f, rho)
-            mcrpc[0] = rho
-            for d in range(D):
-                mcrpc[d + 1] = u[d]
+            mcrpc.rho = zero_moment(f, )
+            mcrpc.u = first_moment(f, mcrpc.rho)
             return mcrpc
 
         return macroscopic
@@ -283,18 +286,17 @@ class LBM_functions:
                 type: wp.uint8,
         ):
             f = wp.vec(length=Q, dtype=sim_dtype)
-            u = wp.vec(length=D, dtype=sim_dtype)
-            rho = wp.vec(length=1, dtype=sim_dtype)
-            rho[0] = sim_dtype(1.0)
+            mcrpc = Marcoscopic()
+            mcrpc.rho = sim_dtype(1.0)
             vel = sim_dtype(0.0)
 
             if type == bc_lid:
                 vel = sim_dtype(prescribed_vel)
 
-            u[0] = vel
-            u[1] = sim_dtype(0.0)
+            mcrpc.u[0] = vel
+            mcrpc.u[1] = sim_dtype(0.0)
 
-            f = equilibrium_fun(rho, u)
+            f = equilibrium_fun(mcrpc)
             return f
         return apply_boundary_conditions
 
@@ -347,15 +349,14 @@ class LBM_functions:
         @wp.func
         def kbc(f: wp.vec(length=Q, dtype=sim_dtype),
                 feq: wp.vec(length=Q, dtype=sim_dtype),
-                rho: wp.vec(length=1, dtype=sim_dtype),
-                u: wp.vec(length=D, dtype=sim_dtype),
+                mcrpc:Marcoscopic,
                 omega: sim_dtype):
             # Get second order moment (a symmetric tensore shaped into a vector)
             # Compute shear and delta_s
             fneq = f - feq
 
             shear = decompose_shear_d2q9(fneq)
-            delta_s = shear * rho[0] / sim_dtype(4.0)
+            delta_s = shear * mcrpc.rho / sim_dtype(4.0)
 
             # Compute required constants based on the input omega (omega is the inverse relaxation time)
             _beta = sim_dtype(0.5) * sim_dtype(omega)
@@ -371,6 +372,25 @@ class LBM_functions:
 
             return fout
         return kbc
+
+    @staticmethod
+    def get_bgk():
+        # Make constants for warp
+        _f_vec = wp.vec(length=Q, dtype=sim_dtype)
+        _pi_dim = D * (D + 1) // 2
+        _pi_vec = wp.vec(_pi_dim, dtype=sim_dtype)
+        epsilon_host = sim_dtype(1e-32)
+        epsilon_dev = wp.constant(epsilon_host)
+
+        @wp.func
+        def bgk(f: wp.vec(length=Q, dtype=sim_dtype),
+                feq: wp.vec(length=Q, dtype=sim_dtype),
+                mcrpc: Marcoscopic,
+                omega: sim_dtype):
+            fneq = f - feq
+            fout = f - sim_dtype(omega) * fneq
+            return fout
+        return bgk
 
 class LBM_kernels:
     @staticmethod
@@ -403,14 +423,15 @@ class LBM_kernels:
 
         return equilibrium
     @staticmethod
-    def get_collision():
+    def get_collision(kbc=False):
         equilibrium_fun = LBM_functions.get_equilibrium()
         macroscopic_fun = LBM_functions.get_macroscopic()
         kbc_fun = LBM_functions.get_kbc()
+        bgk_fun = LBM_functions.get_bgk()
 
         # Construct the warp kernel
         @wp.kernel
-        def equilibrium(
+        def kbc(
                 f: wp.array3d(dtype=sim_dtype),
                 omega : sim_dtype,
         ):
@@ -426,20 +447,47 @@ class LBM_kernels:
                 f_post_stream[q] = f[q, index[0], index[1]]
 
             mcrpc = macroscopic_fun(f_post_stream)
-            rho[0] = mcrpc[0]
-            u[0] = mcrpc[1]
-            u[1] = mcrpc[2]
 
             # Compute the equilibrium
-            f_eq = equilibrium_fun(rho, u)
+            f_eq = equilibrium_fun(mcrpc)
 
-            f_post_collision = kbc_fun(f_post_stream, f_eq, rho, u, omega)
+            f_post_collision = kbc_fun(f_post_stream, f_eq, mcrpc, omega)
+
+            # Set the output
+            for q in range(Q):
+                f[q, index[0], index[1]] = f_post_collision[q]
+        @wp.kernel
+        def bgk(
+                f: wp.array3d(dtype=sim_dtype),
+                omega : sim_dtype,
+        ):
+            # Get the global index
+            i, j = wp.tid()
+            index = wp.vec2i(i, j)
+            # Get the equilibrium
+            u = wp.vector(length=D, dtype=sim_dtype)
+            rho = wp.vector(length=1, dtype=sim_dtype)
+            f_post_stream = wp.vector(length=Q, dtype=sim_dtype)
+
+            for q in range(Q):
+                f_post_stream[q] = f[q, index[0], index[1]]
+
+            mcrpc = macroscopic_fun(f_post_stream)
+
+
+            # Compute the equilibrium
+            f_eq = equilibrium_fun(mcrpc)
+
+            f_post_collision = bgk_fun(f_post_stream, f_eq, mcrpc, omega)
 
             # Set the output
             for q in range(Q):
                 f[q, index[0], index[1]] = f_post_collision[q]
 
-        return equilibrium
+        if kbc:
+            return kbc
+        return bgk
+
     @staticmethod
     def get_set_f_to_equilibrium():
         equilibrium_fun = LBM_functions.get_equilibrium()
@@ -458,14 +506,13 @@ class LBM_kernels:
                 f[q, index[0], index[1]] = w_dev[q]
 
             if bc_type[0, index[0], index[1]] == bc_lid:
-                u = wp.vector(length=D, dtype=sim_dtype)
-                rho = wp.vector(length=1, dtype=sim_dtype)
+                mcrpc = Marcoscopic()
 
-                rho[0] = sim_dtype(1.0)
-                u[0] = sim_dtype(prescribed_vel)
-                u[1] = sim_dtype(0)
+                mcrpc.rho = sim_dtype(1.0)
+                mcrpc.u[0] = sim_dtype(prescribed_vel)
+                mcrpc.u[1] = sim_dtype(0)
 
-                f_eq = equilibrium_fun(rho, u)
+                f_eq = equilibrium_fun(mcrpc)
                 for q in range(Q):
                     f[q, index[0], index[1]] = f_eq[q]
 
@@ -511,8 +558,8 @@ class LBM_kernels:
             mcrpc = macroscopic_fun(f)
 
             for d in range(D):
-                u_out[d, index[0], index[1]] = mcrpc[d + 1]
-            rho_out[0, index[0], index[1]] = mcrpc[0]
+                u_out[d, index[0], index[1]] = mcrpc.u[d]
+            rho_out[0, index[0], index[1]] = mcrpc.rho
 
         return macroscopic
 
@@ -572,7 +619,7 @@ wp.launch(LBM_kernels.get_set_f_to_equilibrium(),
 # ---------------------
 # Main time-stepping
 # ---------------------
-for step in range(10):
+for step in range(num_steps):
     wp.launch(LBM_kernels.get_pull_stream(),
               dim=grid_shape,
               inputs=[f_0, f_1],
@@ -581,10 +628,15 @@ for step in range(10):
               dim=grid_shape,
               inputs=[bc_type, f_1],
               device="cuda")
-    wp.launch(LBM_kernels.get_macroscopic(),
-              dim=grid_shape,
-              inputs=[f_1, rho, u],
-              device="cuda")
+    if step % 100 == 0:
+        wp.launch(LBM_kernels.get_macroscopic(),
+                  dim=grid_shape,
+                  inputs=[f_1, rho, u],
+                  device="cuda")
+        export_warp_field_to_vti(
+            filename=f"u_{step}.vti",
+            u=u,
+        )
     wp.launch(LBM_kernels.get_collision(),
               dim=grid_shape,
               inputs=[f_1, omega],
