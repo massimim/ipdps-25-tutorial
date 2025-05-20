@@ -13,7 +13,6 @@ import warp as wp
 import numpy as np
 import pyvista as pv
 
-from l import sim_dtype
 
 
 class Parameters:

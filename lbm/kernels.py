@@ -1,7 +1,6 @@
 import typing
 import warp as wp
 import lbm
-from l import w_dev
 
 
 class Kernels:
@@ -113,7 +112,7 @@ class Kernels:
         write = self.memory.get_write()
         @wp.kernel
         def set_f_to_equilibrium(
-                bc_type: wp.array3d(dtype=wp.uint8),
+                bc_type: wp.array2d(dtype=wp.uint8),
                 f: wp.array3d(dtype=sim_dtype),
         ):
             # Get the global index
@@ -122,9 +121,9 @@ class Kernels:
 
             # Set the output
             for q in range(Q):
-                write(field=f, card=q, xi=index[0], yi=[1], value=w_dev[q])
+                write(field=f, card=q, xi=index[0], yi=index[1], value=w_dev[q])
 
-            if bc_type[0, index[0], index[1]] == bc_lid:
+            if bc_type[index[0], index[1]] == bc_lid:
                 mcrpc = Macro()
 
                 mcrpc.rho = sim_dtype(1.0)
@@ -133,7 +132,7 @@ class Kernels:
 
                 f_eq = equilibrium_fun(mcrpc)
                 for q in range(Q):
-                    write(field=f, card=q, xi=index[0], yi=[1], value=f_eq[q])
+                    write(field=f, card=q, xi=index[0], yi=index[1], value=f_eq[q])
 
         return set_f_to_equilibrium
 
@@ -190,7 +189,7 @@ class Kernels:
         @wp.kernel
         def macroscopic(
                 f_in: wp.array3d(dtype=sim_dtype),
-                rho_out: wp.array3d(dtype=sim_dtype),
+                rho_out: wp.array2d(dtype=sim_dtype),
                 u_out: wp.array3d(dtype=sim_dtype),
         ):
             # Get the global index
@@ -278,18 +277,18 @@ class Kernels:
 
         @wp.kernel
         def set_bc(
-                bc_type: wp.array3d(dtype=wp.uint8),
+                bc_type: wp.array2d(dtype=wp.uint8),
         ):
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
 
-            bc_type[0, index[0], index[1]] = bc_bulk
+            bc_type[index[0], index[1]] = bc_bulk
 
             if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
-                bc_type[0, index[0], index[1]] = bc_wall
+                bc_type[index[0], index[1]] = bc_wall
 
             if i == nx - 1 and (j != 0 and j != ny - 1):
-                bc_type[0, index[0], index[1]] = bc_lid
+                bc_type[index[0], index[1]] = bc_lid
 
         return set_bc

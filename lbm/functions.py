@@ -18,7 +18,7 @@ class Functions:
 
         @wp.func
         def equilibrium(
-                mcrpc: Macro,
+                mcrpc: typing.Any,
         ):
             f_out = wp.vec(length=Q, dtype=sim_dtype)
 

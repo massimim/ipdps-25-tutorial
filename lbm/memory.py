@@ -41,18 +41,89 @@ class Memory:
         return f
 
     def get_read(self):
-        @wp.function
-        def read_field(field, card, xi, yi):
+        sim_dtype = self.params.sim_dtype
+
+        @wp.func
+        def read_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32):
             return field[card, xi, yi]
 
         return read_field
 
     def get_write(self):
-        @wp.function
-        def write_field(field, card, xi, yi, value):
+        sim_dtype = self.params.sim_dtype
+
+        @wp.func
+        def write_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32, value: sim_dtype):
             field[card, xi, yi] = value
 
         return write_field
+
+    def export_warp_field_to_vti(self,
+            filename: str,
+            u: wp.array,
+            origin: tuple = (0.0, 0.0, 0.0),
+            spacing: tuple = (1.0, 1.0, 1.0),
+            name: str = "field",
+            pad_to_3: bool = True
+    ):
+        """
+        Export a Warp array u of shape (D, nx, ny) to .vti for ParaView.
+
+        D=1 → scalar
+        D=2 → 2-comp vector (padded to 3 if pad_to_3=True)
+        D=3 → 3-comp vector
+        D=9 → 9-comp generic array (no VTK-level tensor tag)
+        """
+        # bring back to NumPy
+        field = u.numpy()  # shape (D, nx, ny)
+
+        if field.ndim == 2:
+            field = field[np.newaxis, ...]
+        elif field.ndim != 3:
+            raise ValueError(f"u must be shape (nx,ny) or (D,nx,ny), got {field.shape}")
+        D, nx, ny = field.shape
+        if D not in (1, 2, 3, 9):
+            raise ValueError("D must be 1, 2, 3 or 9")
+
+        # build a flat slab
+        grid = pv.ImageData(
+            dimensions=(nx, ny, 1),
+            spacing=spacing,
+            origin=origin
+        )
+
+        # flatten components
+        flats = [field[i].ravel(order="C") for i in range(D)]
+
+        if D == 1:
+            grid.point_data[name] = flats[0]
+
+        elif D == 2:
+            fx, fy = flats
+            if pad_to_3:
+                fz = np.zeros_like(fx)
+                arr = np.column_stack((fx, fy, fz))
+            else:
+                arr = np.column_stack((fx, fy))
+            grid.point_data[name] = arr
+
+        elif D == 3:
+            fx, fy, fz = flats
+            arr = np.column_stack((fx, fy, fz))
+            grid.point_data[name] = arr
+
+        else:  # D == 9
+            tensor9 = np.stack(flats, axis=1)  # shape (nx*ny, 9)
+            # attach as a generic 9-component array
+            grid.point_data[name] = tensor9
+            # DO NOT call SetActiveTensors here — ParaView will load it stably.
+
+        # write out
+        grid.save(filename)
+        kind = {1: "scalar", 2: "2-comp vector", 3: "3-comp vector", 9: "9-comp array"}[D]
+        if D == 2 and pad_to_3:
+            kind += " (padded to 3)"
+        print(f"Wrote {kind} '{name}' → {filename}")
 
     # to string method
     def __str__(self):
