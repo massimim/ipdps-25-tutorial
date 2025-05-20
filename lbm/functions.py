@@ -249,7 +249,7 @@ class Functions:
         @wp.func
         def bgk(f: wp.vec(length=Q, dtype=sim_dtype),
                 feq: wp.vec(length=Q, dtype=sim_dtype),
-                mcrpc: Macro,
+                mcrpc: typing.Any,
                 omega: sim_dtype):
             fneq = f - feq
             fout = f - sim_dtype(omega) * fneq

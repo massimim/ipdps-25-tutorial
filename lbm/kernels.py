@@ -91,7 +91,7 @@ class Kernels:
 
             # Set the output
             for q in range(Q):
-                write(field=f, card=q, xi=index[0], yi=[1], value=f_post_collision[q])
+                write(field=f, card=q, xi=index[0], yi=index[1], value=f_post_collision[q])
 
         return collision
 
@@ -164,7 +164,7 @@ class Kernels:
             f_post = pull_stream_fun(index, f_in)
             # Set the output
             for q in range(Q):
-                write(field=f_out, card=q, xi=index[0], yi=[1], value=f_post[q])
+                write(field=f_out, card=q, xi=index[0], yi=index[1], value=f_post[q])
 
         return pull_stream
 
@@ -234,21 +234,21 @@ class Kernels:
 
         @wp.kernel
         def apply_boundary_conditions(
-                bc_type: wp.array3d(dtype=wp.uint8),
+                bc_type: wp.array2d(dtype=wp.uint8),
                 f_out: wp.array3d(dtype=sim_dtype),
         ):
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
 
-            type = bc_type[0, index[0], index[1]]
+            type = bc_type[index[0], index[1]]
             if type == bc_bulk:
                 return
 
             f = apply_boundary_conditions_fun(type)
 
             for q in range(Q):
-                write(field=f_out, card=q, xi=index[0], yi=[1], value=f[q])
+                write(field=f_out, card=q, xi=index[0], yi=index[1], value=f[q])
 
         return apply_boundary_conditions
 
