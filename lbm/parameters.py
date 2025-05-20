@@ -34,8 +34,8 @@ class Parameters:
         self.prescribed_vel = prescribed_vel
         clength = self.grid_shape[0] - 1
         visc = prescribed_vel * clength / Re
-        # self.omega = 1.0 / (3.0 * visc + 0.5)
-        self.omega = 1.0
+        self.omega = 1.0 / (3.0 * visc + 0.5)
+        #self.omega = 1.0
 
         def help_construct_opposite_indices(c_host):
             c = c_host.T

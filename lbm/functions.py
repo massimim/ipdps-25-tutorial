@@ -207,7 +207,7 @@ class Functions:
         @wp.func
         def kbc(f: wp.vec(length=Q, dtype=sim_dtype),
                 feq: wp.vec(length=Q, dtype=sim_dtype),
-                mcrpc: Macro,
+                mcrpc: typing.Any,
                 omega: sim_dtype):
             # Get second order moment (a symmetric tensore shaped into a vector)
             # Compute shear and delta_s

@@ -10,7 +10,8 @@ import warp as wp
 def main():
     wp.clear_kernel_cache()
     # Initialize the parameters
-    params = lbm.Parameters(num_steps=3, nx=200, ny=10, prescribed_vel=0.05)
+    params = lbm.Parameters(num_steps=1000000, nx=500, ny=500, prescribed_vel=0.05,
+                            Re=10000.0)
     print(params)
 
     # Initialize the memory
@@ -58,7 +59,7 @@ def main():
                   inputs=[mem.bc_type, mem.f_1],
                   device="cuda")
 
-        if it % 1 == 0:
+        if it % 10000 == 0:
             wp.launch(kernels.get_macroscopic(),
                       dim=params.grid_shape,
                       inputs=[mem.f_1, mem.rho, mem.u],
@@ -66,7 +67,7 @@ def main():
             # mem.export_warp_field_to_vti(filename=f"u_{it}.vti", u=mem.u)
             mem.save_magnituge_vtk(it)
 
-        wp.launch(kernels.get_collision(),
+        wp.launch(kernels.get_collision(kbc=True),
                   dim=params.grid_shape,
                   inputs=[mem.f_1, params.omega],
                   device="cuda")

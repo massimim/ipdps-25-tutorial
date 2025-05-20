@@ -273,11 +273,11 @@ class Kernels:
 
             bc_type[index[0], index[1]] = bc_bulk
 
-            if i == 0 or j == 0 or j == ny - 1:
+            if i == 0 or j == 0 or i == nx - 1:
                 bc_type[index[0], index[1]] = bc_wall
                 return
 
-            if i == nx - 1 and (j != 0 and j != ny - 1):
+            if j == ny - 1 and (i != 0 and i != nx - 1):
                 bc_type[index[0], index[1]] = bc_lid
 
         return set_bc
