@@ -125,7 +125,6 @@ class Kernels:
 
             if bc_type[index[0], index[1]] == bc_lid:
                 mcrpc = Macro()
-
                 mcrpc.rho = sim_dtype(1.0)
                 mcrpc.u[0] = sim_dtype(prescribed_vel)
                 mcrpc.u[1] = sim_dtype(0)
@@ -138,8 +137,6 @@ class Kernels:
 
     def get_pull_stream(self):
         pull_stream_fun = self.functions.get_pull_stream()
-
-        equilibrium_fun = self.functions.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
         sim_dtype = self.params.sim_dtype
@@ -170,9 +167,6 @@ class Kernels:
 
     def get_macroscopic(self):
         macroscopic_fun = self.functions.get_macroscopic()
-        pull_stream_fun = self.functions.get_pull_stream()
-
-        equilibrium_fun = self.functions.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
         sim_dtype = self.params.sim_dtype
@@ -253,12 +247,6 @@ class Kernels:
         return apply_boundary_conditions
 
     def get_set_bc(self):
-        apply_boundary_conditions_fun = self.functions.get_apply_boundary_conditions()
-
-        macroscopic_fun = self.functions.get_macroscopic()
-        pull_stream_fun = self.functions.get_pull_stream()
-
-        equilibrium_fun = self.functions.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
         sim_dtype = self.params.sim_dtype
@@ -285,8 +273,9 @@ class Kernels:
 
             bc_type[index[0], index[1]] = bc_bulk
 
-            if i == 0 or i == nx - 1 or j == 0 or j == ny - 1:
+            if i == 0 or j == 0 or j == ny - 1:
                 bc_type[index[0], index[1]] = bc_wall
+                return
 
             if i == nx - 1 and (j != 0 and j != ny - 1):
                 bc_type[index[0], index[1]] = bc_lid

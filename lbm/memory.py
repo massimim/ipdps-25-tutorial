@@ -13,6 +13,8 @@ import warp as wp
 import numpy as np
 import pyvista as pv
 import lbm
+import os
+import time
 
 
 class Memory:
@@ -53,19 +55,87 @@ class Memory:
         sim_dtype = self.params.sim_dtype
 
         @wp.func
-        def write_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32, value: sim_dtype):
+        def write_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32,
+                        value: sim_dtype):
             field[card, xi, yi] = value
 
         return write_field
 
+    def save_magnituge_vtk(self, timestep):
+        u = self.u.numpy()
+        u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
+        fields = {"u_magnitude": u_magnitude,
+                  "u_x": u[0],
+                  "u_y": u[1]}
+        self.save_fields_vtk(fields, timestep, prefix="u")
+
+    def save_bc_vtk(self, timestep):
+        bc_type = self.bc_type.numpy()
+        fields = {"bc_type": bc_type}
+        self.save_fields_vtk(fields, timestep)
+
+    def save_fields_vtk(self, fields, timestep, output_dir=".", prefix="fields"):
+        """
+        Save VTK fields to the specified directory.
+
+        Parameters
+        ----------
+        timestep (int): The timestep number to be associated with the saved fields.
+        fields (Dict[str, np.ndarray]): A dictionary of fields to be saved. Each field must be an array-like object
+            with dimensions (nx, ny) for 2D fields or (nx, ny, nz) for 3D fields, where:
+                - nx : int, number of grid points along the x-axis
+                - ny : int, number of grid points along the y-axis
+                - nz : int, number of grid points along the z-axis (for 3D fields only)
+            The key value for each field in the dictionary must be a string containing the name of the field.
+        output_dir (str, optional, default: '.'): The directory in which to save the VTK files. Defaults to the current directory.
+        prefix (str, optional, default: 'fields'): A prefix to be added to the filename. Defaults to 'fields'.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This function saves the VTK fields in the specified directory, with filenames based on the provided timestep number
+        and the filename. For example, if the timestep number is 10 and the file name is fields, the VTK file
+        will be saved as 'fields_0000010.vtk'in the specified directory.
+
+        """
+        # Assert that all fields have the same dimensions
+        for key, value in fields.items():
+            if key == list(fields.keys())[0]:
+                dimensions = value.shape
+            else:
+                assert value.shape == dimensions, "All fields must have the same dimensions!"
+
+        output_filename = os.path.join(output_dir, prefix + "_" + f"{timestep:07d}.vtk")
+
+        # Add 1 to the dimensions tuple as we store cell values
+        dimensions = tuple([dim + 1 for dim in dimensions])
+
+        # Create a uniform grid
+        if value.ndim == 2:
+            dimensions = dimensions + (1,)
+
+        grid = pv.ImageData(dimensions=dimensions)
+
+        # Add the fields to the grid
+        for key, value in fields.items():
+            grid[key] = value.flatten(order="F")
+
+        # Save the grid to a VTK file
+        start = time.time()
+        grid.save(output_filename, binary=True)
+        print(f"Saved {output_filename} in {time.time() - start:.6f} seconds.")
+
     def export_warp_field_to_vti(self,
-            filename: str,
-            u: wp.array,
-            origin: tuple = (0.0, 0.0, 0.0),
-            spacing: tuple = (1.0, 1.0, 1.0),
-            name: str = "field",
-            pad_to_3: bool = True
-    ):
+                                 filename: str,
+                                 u: wp.array,
+                                 origin: tuple = (0.0, 0.0, 0.0),
+                                 spacing: tuple = (1.0, 1.0, 1.0),
+                                 name: str = "field",
+                                 pad_to_3: bool = True
+                                 ):
         """
         Export a Warp array u of shape (D, nx, ny) to .vti for ParaView.
 

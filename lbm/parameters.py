@@ -14,7 +14,6 @@ import numpy as np
 import pyvista as pv
 
 
-
 class Parameters:
     def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05, sim_dtype=wp.float64):
         self.D = 2
@@ -35,7 +34,8 @@ class Parameters:
         self.prescribed_vel = prescribed_vel
         clength = self.grid_shape[0] - 1
         visc = prescribed_vel * clength / Re
-        self.omega = 1.0 / (3.0 * visc + 0.5)
+        # self.omega = 1.0 / (3.0 * visc + 0.5)
+        self.omega = 1.0
 
         def help_construct_opposite_indices(c_host):
             c = c_host.T
@@ -73,7 +73,7 @@ class Parameters:
         self.w_host = np.array([4 / 9, 1 / 9, 1 / 9, 1 / 9, 1 / 36, 1 / 36, 1 / 9, 1 / 36, 1 / 36])
         self.opp_indices_host = help_construct_opposite_indices(self.c_host)
         self.cc_host = help_construct_lattice_moment(self.c_host)
-        #print(self.c_host)
+        # print(self.c_host)
 
         self.sim_dtype = wp.float64
         self.c_dev = wp.constant(wp.mat((self.D, self.Q), dtype=wp.int32)(self.c_host))
@@ -89,7 +89,14 @@ class Parameters:
         class Macroscopic:
             rho: sim_dtype
             u: wp.vec(length=D, dtype=sim_dtype)
+
         return Macroscopic
+
+    def compute_mlups(self, elapsed_time):
+        num_cells = self.nx * self.ny
+        total_updates = num_cells * self.num_steps
+        mlups = (total_updates / elapsed_time) / 1e6
+        return mlups
 
     # add a to string method for printing the parameters
     def __str__(self):

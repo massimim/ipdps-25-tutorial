@@ -47,6 +47,8 @@ class Functions:
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
+        w_dev = self.params.w_dev
+        nx, ny = self.params.grid_shape
 
         @wp.func
         def pull_stream(
@@ -55,8 +57,9 @@ class Functions:
         ):
 
             f_vec = wp.vec(length=Q, dtype=sim_dtype)
+
             for q in range(Q):
-                pull_ngh = wp.vec3i(0, 0, 0)
+                pull_ngh = wp.vec2i(0, 0)
                 outside_domain = False
                 for d in range(D):
                     pull_ngh[d] = index[d] - c_dev[d, q]
@@ -133,7 +136,6 @@ class Functions:
         def apply_boundary_conditions(
                 type: wp.uint8,
         ):
-            f = wp.vec(length=Q, dtype=sim_dtype)
             mcrpc = Macro()
             mcrpc.rho = sim_dtype(1.0)
             vel = sim_dtype(0.0)
