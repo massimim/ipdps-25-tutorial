@@ -13,15 +13,18 @@ import warp as wp
 import numpy as np
 import pyvista as pv
 
+from l import sim_dtype
+
 
 class Parameters:
-    def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05):
+    def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05, sim_dtype=wp.float64):
         self.D = 2
         self.Q = 9
         self.nx = nx
         self.ny = ny
         self.grid_shape = (nx, ny)
         self.num_steps = num_steps
+        self.sim_dtype = sim_dtype
 
         # Desired Reynolds number
         # Setting fluid viscosity and relaxation parameter.
@@ -75,6 +78,15 @@ class Parameters:
         self.opp_indices = wp.constant(wp.vec(self.Q, dtype=wp.int32)(self.opp_indices_host))
         self.cc_dev = wp.constant(wp.mat((self.Q, self.D * (self.D + 1) // 2), dtype=self.sim_dtype)(self.cc_host))
 
+    def get_macroscopic_type(self):
+        sim_dtype = self.sim_dtype
+        D = self.D
+
+        @wp.struct
+        class Macroscopic:
+            rho: sim_dtype
+            u: wp.vec(length=D, dtype=sim_dtype)
+        return Macroscopic
 
     # add a to string method for printing the parameters
     def __str__(self):
