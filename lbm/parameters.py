@@ -24,6 +24,11 @@ class Parameters:
         self.num_steps = num_steps
         self.sim_dtype = sim_dtype
 
+        self.export_vtk = False
+        self.export_img = False
+        self.export_frequency = 1000
+        self.export_prefix = "lbm_"
+
         self.bc_bulk = wp.uint8(0)
         self.bc_wall = wp.uint8(1)
         self.bc_lid = wp.uint8(2)
@@ -80,6 +85,7 @@ class Parameters:
         self.w_dev = wp.constant(wp.vec(self.Q, dtype=self.sim_dtype)(self.w_host))
         self.opp_indices = wp.constant(wp.vec(self.Q, dtype=wp.int32)(self.opp_indices_host))
         self.cc_dev = wp.constant(wp.mat((self.Q, self.D * (self.D + 1) // 2), dtype=self.sim_dtype)(self.cc_host))
+
 
     def get_macroscopic_type(self):
         sim_dtype = self.sim_dtype

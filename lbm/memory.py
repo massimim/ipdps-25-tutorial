@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import warp as wp
+from matplotlib import cm
 from pyevtk.hl import imageToVTK
 import typing
 import numpy as np
@@ -61,34 +62,36 @@ class Memory:
 
         return write_field
 
-    def save_magnituge_vtk(self, timestep):
+    def save_magnituge_vtk(self, timestep, prefix):
         u = self.u.numpy()
         u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
         fields = {"u_magnitude": u_magnitude,
                   "u_x": u[0],
                   "u_y": u[1]}
-        self.save_fields_vtk(fields, timestep, prefix="u")
+        self.save_fields_vtk(fields, timestep, prefix=prefix)
+
+    def save_magnituge_img(self, timestep, prefix):
+        u = self.u.numpy()
+        u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
+        self.save_image(u_magnitude, timestep, prefix=prefix)
 
     def save_bc_vtk(self, timestep):
         bc_type = self.bc_type.numpy()
         fields = {"bc_type": bc_type}
         self.save_fields_vtk(fields, timestep)
 
-    def save_fields_vtk(self, fields, timestep, output_dir=".", prefix="fields"):
+    def save_image(self, fld, timestep=None, prefix=None, **kwargs):
         """
-        Save VTK fields to the specified directory.
+        Save an image of a field at a given timestep.
 
         Parameters
         ----------
-        timestep (int): The timestep number to be associated with the saved fields.
-        fields (Dict[str, np.ndarray]): A dictionary of fields to be saved. Each field must be an array-like object
-            with dimensions (nx, ny) for 2D fields or (nx, ny, nz) for 3D fields, where:
-                - nx : int, number of grid points along the x-axis
-                - ny : int, number of grid points along the y-axis
-                - nz : int, number of grid points along the z-axis (for 3D fields only)
-            The key value for each field in the dictionary must be a string containing the name of the field.
-        output_dir (str, optional, default: '.'): The directory in which to save the VTK files. Defaults to the current directory.
-        prefix (str, optional, default: 'fields'): A prefix to be added to the filename. Defaults to 'fields'.
+        timestep : int
+            The timestep at which the field is being saved.
+        fld : jax.numpy.ndarray
+            The field to be saved. This should be a 2D or 3D JAX array. If the field is 3D, the magnitude of the field will be calculated and saved.
+        prefix : str, optional
+            A prefix to be added to the filename. The filename will be the name of the main script file by default.
 
         Returns
         -------
@@ -96,12 +99,27 @@ class Memory:
 
         Notes
         -----
-        This function saves the VTK fields in the specified directory, with filenames based on the provided timestep number
-        and the filename. For example, if the timestep number is 10 and the file name is fields, the VTK file
-        will be saved as 'fields_0000010.vtk'in the specified directory.
-
+        This function saves the field as an image in the PNG format.
+        The filename is based on the name of the main script file, the provided prefix, and the timestep number.
+        If the field is 3D, the magnitude of the field is calculated and saved.
+        The image is saved with the 'nipy_spectral' colormap and the origin set to 'lower'.
         """
-        # Assert that all fields have the same dimensions
+
+        fname = prefix
+
+        if timestep is not None:
+            fname = fname + "_" + str(timestep).zfill(4)
+
+        if len(fld.shape) > 3:
+            raise ValueError("The input field should be 2D!")
+        if len(fld.shape) == 3:
+            fld = np.sqrt(fld[0, ...] ** 2 + fld[0, ...] ** 2)
+
+        plt.clf()
+        kwargs.pop("cmap", None)
+        plt.imsave(fname + ".png", fld.T, cmap=cm.nipy_spectral, origin="lower", **kwargs)
+
+    def save_fields_vtk(self, fields, timestep, output_dir=".", prefix="fields"):
         for key, value in fields.items():
             if key == list(fields.keys())[0]:
                 dimensions = value.shape
@@ -198,3 +216,15 @@ class Memory:
     # to string method
     def __str__(self):
         return f"Memory(f_0={self.f_0}, f_1={self.f_1}, bc_type={self.bc_type}, u={self.u}, rho={self.rho})"
+
+    def export(self, it):
+        if it % self.params.export_frequency == 0:
+            if self.params.export_vtk:
+                self.save_magnituge_vtk(it, prefix=self.params.export_prefix+"_u")
+                return
+            if self.params.export_img:
+                self.save_magnituge_img(it, prefix=self.params.export_prefix+"_u")
+                return
+
+    def export_final(self):
+        self.save_magnituge_img(self.params.num_steps, prefix=self.params.export_prefix + "_u")
