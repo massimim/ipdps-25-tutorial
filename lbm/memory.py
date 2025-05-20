@@ -42,15 +42,15 @@ class Memory:
 
     def get_read(self):
         @wp.function
-        def read_field(f, card, xi, yi):
-            return f[card, xi, yi]
+        def read_field(field, card, xi, yi):
+            return field[card, xi, yi]
 
         return read_field
 
     def get_write(self):
         @wp.function
-        def write_field(f, card, xi, yi, value):
-            f[card, xi, yi] = value
+        def write_field(field, card, xi, yi, value):
+            field[card, xi, yi] = value
 
         return write_field
 

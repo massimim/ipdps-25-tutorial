@@ -3,5 +3,5 @@ import lbm
 params = lbm.Parameters()
 print(params)
 mem = lbm.Memory(params)
-print(mem)
-
+fun = lbm.Functions(params)
+kernels = lbm.Kernels(params, mem, fun)
