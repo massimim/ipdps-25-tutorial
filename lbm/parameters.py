@@ -26,6 +26,10 @@ class Parameters:
         self.num_steps = num_steps
         self.sim_dtype = sim_dtype
 
+        self.bc_bulk = wp.uint8(0)
+        self.bc_wall = wp.uint8(1)
+        self.bc_lid = wp.uint8(2)
+
         # Desired Reynolds number
         # Setting fluid viscosity and relaxation parameter.
         self.Re = Re
