@@ -1,4 +1,3 @@
-import typing
 import warp as wp
 import lbm
 
@@ -13,7 +12,7 @@ class Kernels:
 
     def get_equilibrium(self):
         equilibrium_fun = self.functions.get_equilibrium()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -23,16 +22,16 @@ class Kernels:
         # Construct the warp kernel
         @wp.kernel
         def equilibrium(
-                rho_in: wp.array3d(dtype=sim_dtype),
-                u_in: wp.array3d(dtype=sim_dtype),
-                f_out: wp.array3d(dtype=sim_dtype),
+                rho_in: wp.array3d(dtype=wp.float64),
+                u_in: wp.array3d(dtype=wp.float64),
+                f_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
             # Get the equilibrium
-            u = wp.vector(length=D, dtype=sim_dtype)
-            rho = wp.vector(length=1, dtype=sim_dtype)
+            u = wp.vector(length=D, dtype=wp.float64)
+            rho = wp.vector(length=1, dtype=wp.float64)
 
             for d in range(D):
                 u[d] = read(field=u_in, card=d, xi=index[0], yi=index[1])
@@ -58,7 +57,7 @@ class Kernels:
             collision_fun = self.functions.get_bgk()
 
         equilibrium_fun = self.functions.get_equilibrium()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -68,16 +67,16 @@ class Kernels:
         # Construct the warp kernel
         @wp.kernel
         def collision(
-                f: wp.array3d(dtype=sim_dtype),
-                omega: sim_dtype,
+                f: wp.array3d(dtype=wp.float64),
+                omega: wp.float64,
         ):
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
             # Get the equilibrium
-            u = wp.vector(length=D, dtype=sim_dtype)
-            rho = wp.vector(length=1, dtype=sim_dtype)
-            f_post_stream = wp.vector(length=Q, dtype=sim_dtype)
+            u = wp.vector(length=D, dtype=wp.float64)
+            rho = wp.vector(length=1, dtype=wp.float64)
+            f_post_stream = wp.vector(length=Q, dtype=wp.float64)
 
             for q in range(Q):
                 f_post_stream[q] = read(field=f, card=q, xi=index[0], yi=index[1])
@@ -100,7 +99,7 @@ class Kernels:
         equilibrium_fun = self.functions.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -113,7 +112,7 @@ class Kernels:
         @wp.kernel
         def set_f_to_equilibrium(
                 bc_type: wp.array2d(dtype=wp.uint8),
-                f: wp.array3d(dtype=sim_dtype),
+                f: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
             i, j = wp.tid()
@@ -125,9 +124,9 @@ class Kernels:
 
             if bc_type[index[0], index[1]] == bc_lid:
                 mcrpc = Macro()
-                mcrpc.rho = sim_dtype(1.0)
-                mcrpc.u[0] = sim_dtype(prescribed_vel)
-                mcrpc.u[1] = sim_dtype(0)
+                mcrpc.rho = wp.float64(1.0)
+                mcrpc.u[0] = wp.float64(prescribed_vel)
+                mcrpc.u[1] = wp.float64(0)
 
                 f_eq = equilibrium_fun(mcrpc)
                 for q in range(Q):
@@ -139,7 +138,7 @@ class Kernels:
         pull_stream_fun = self.functions.get_pull_stream()
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -152,8 +151,8 @@ class Kernels:
 
         @wp.kernel
         def pull_stream(
-                f_in: wp.array3d(dtype=sim_dtype),
-                f_out: wp.array3d(dtype=sim_dtype),
+                f_in: wp.array3d(dtype=wp.float64),
+                f_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
             i, j = wp.tid()
@@ -169,7 +168,7 @@ class Kernels:
         macroscopic_fun = self.functions.get_macroscopic()
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -182,15 +181,15 @@ class Kernels:
 
         @wp.kernel
         def macroscopic(
-                f_in: wp.array3d(dtype=sim_dtype),
-                rho_out: wp.array2d(dtype=sim_dtype),
-                u_out: wp.array3d(dtype=sim_dtype),
+                f_in: wp.array3d(dtype=wp.float64),
+                rho_out: wp.array2d(dtype=wp.float64),
+                u_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
             i, j = wp.tid()
             index = wp.vec2i(i, j)
 
-            f = wp.vector(length=Q, dtype=sim_dtype)
+            f = wp.vector(length=Q, dtype=wp.float64)
 
             for q in range(Q):
                 f[q] = f_in[q, index[0], index[1]]
@@ -213,7 +212,7 @@ class Kernels:
         equilibrium_fun = self.functions.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 
@@ -229,7 +228,7 @@ class Kernels:
         @wp.kernel
         def apply_boundary_conditions(
                 bc_type: wp.array2d(dtype=wp.uint8),
-                f_out: wp.array3d(dtype=sim_dtype),
+                f_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
             i, j = wp.tid()
@@ -249,7 +248,7 @@ class Kernels:
     def get_set_bc(self):
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
 

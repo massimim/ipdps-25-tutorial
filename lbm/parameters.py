@@ -1,28 +1,15 @@
-import numpy as np
-import matplotlib.pyplot as plt
-import warp as wp
-from pyevtk.hl import imageToVTK
-import typing
-import numpy as np
-import pyvista as pv
 import warp as wp
 import numpy as np
-import pyvista as pv
-
-import warp as wp
-import numpy as np
-import pyvista as pv
 
 
 class Parameters:
-    def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05, sim_dtype=wp.float64):
+    def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05):
         self.D = 2
         self.Q = 9
         self.nx = nx
         self.ny = ny
         self.grid_shape = (nx, ny)
         self.num_steps = num_steps
-        self.sim_dtype = sim_dtype
 
         self.export_vtk = False
         self.export_img = False
@@ -80,21 +67,21 @@ class Parameters:
         self.cc_host = help_construct_lattice_moment(self.c_host)
         # print(self.c_host)
 
-        self.sim_dtype = wp.float64
+        
         self.c_dev = wp.constant(wp.mat((self.D, self.Q), dtype=wp.int32)(self.c_host))
-        self.w_dev = wp.constant(wp.vec(self.Q, dtype=self.sim_dtype)(self.w_host))
+        self.w_dev = wp.constant(wp.vec(self.Q, dtype=wp.float64)(self.w_host))
         self.opp_indices = wp.constant(wp.vec(self.Q, dtype=wp.int32)(self.opp_indices_host))
-        self.cc_dev = wp.constant(wp.mat((self.Q, self.D * (self.D + 1) // 2), dtype=self.sim_dtype)(self.cc_host))
+        self.cc_dev = wp.constant(wp.mat((self.Q, self.D * (self.D + 1) // 2), dtype=wp.float64)(self.cc_host))
 
 
     def get_macroscopic_type(self):
-        sim_dtype = self.sim_dtype
+        
         D = self.D
 
         @wp.struct
         class Macroscopic:
-            rho: sim_dtype
-            u: wp.vec(length=D, dtype=sim_dtype)
+            rho: wp.float64
+            u: wp.vec(length=D, dtype=wp.float64)
 
         return Macroscopic
 

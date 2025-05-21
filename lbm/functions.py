@@ -10,7 +10,7 @@ class Functions:
     def get_equilibrium(self):
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -20,30 +20,30 @@ class Functions:
         def equilibrium(
                 mcrpc: typing.Any,
         ):
-            f_out = wp.vec(length=Q, dtype=sim_dtype)
+            f_out = wp.vec(length=Q, dtype=wp.float64)
 
             # Compute the equilibrium
             for q in range(Q):
                 # Compute cu
-                cu = sim_dtype(0.0)
+                cu = wp.float64(0.0)
                 for d in range(D):
                     if c_dev[d, q] == 1:
                         cu += mcrpc.u[d]
                     elif c_dev[d, q] == -1:
                         cu -= mcrpc.u[d]
-                cu *= sim_dtype(3.0)
+                cu *= wp.float64(3.0)
 
                 # Compute usqr
-                usqr = sim_dtype(1.5) * wp.dot(mcrpc.u, mcrpc.u)
+                usqr = wp.float64(1.5) * wp.dot(mcrpc.u, mcrpc.u)
 
                 # Compute feq
-                f_out[q] = mcrpc.rho * w_dev[q] * (sim_dtype(1.0) + cu * (sim_dtype(1.0) + sim_dtype(0.5) * cu) - usqr)
+                f_out[q] = mcrpc.rho * w_dev[q] * (wp.float64(1.0) + cu * (wp.float64(1.0) + wp.float64(0.5) * cu) - usqr)
             return f_out
 
         return equilibrium
 
     def get_pull_stream(self):
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -53,10 +53,10 @@ class Functions:
         @wp.func
         def pull_stream(
                 index: typing.Any,
-                f_mem: wp.array3d(dtype=sim_dtype),
+                f_mem: wp.array3d(dtype=wp.float64),
         ):
 
-            f_vec = wp.vec(length=Q, dtype=sim_dtype)
+            f_vec = wp.vec(length=Q, dtype=wp.float64)
 
             for q in range(Q):
                 pull_ngh = wp.vec2i(0, 0)
@@ -79,7 +79,7 @@ class Functions:
 
     def get_macroscopic(self):
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -87,19 +87,19 @@ class Functions:
 
         @wp.func
         def zero_moment(
-                f: wp.vec(length=Q, dtype=sim_dtype),
+                f: wp.vec(length=Q, dtype=wp.float64),
         ):
-            rho = sim_dtype(0.0)
+            rho = wp.float64(0.0)
             for l in range(Q):
                 rho += f[l]
             return rho
 
         @wp.func
         def first_moment(
-                f: wp.vec(length=Q, dtype=sim_dtype),
-                rho: sim_dtype,
+                f: wp.vec(length=Q, dtype=wp.float64),
+                rho: wp.float64,
         ):
-            u_out = wp.vec(length=D, dtype=sim_dtype)
+            u_out = wp.vec(length=D, dtype=wp.float64)
 
             for l in range(Q):
                 for d in range(D):
@@ -112,7 +112,7 @@ class Functions:
 
         @wp.func
         def macroscopic(
-                f: wp.vec(length=Q, dtype=sim_dtype),
+                f: wp.vec(length=Q, dtype=wp.float64),
         ):
             mcrpc = Macro()
             # Compute the macroscopic variables
@@ -126,7 +126,7 @@ class Functions:
         equilibrium_fun = self.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         bc_lid = self.params.bc_lid
@@ -137,14 +137,14 @@ class Functions:
                 type: wp.uint8,
         ):
             mcrpc = Macro()
-            mcrpc.rho = sim_dtype(1.0)
-            vel = sim_dtype(0.0)
+            mcrpc.rho = wp.float64(1.0)
+            vel = wp.float64(0.0)
 
             if type == bc_lid:
-                vel = sim_dtype(prescribed_vel)
+                vel = wp.float64(prescribed_vel)
 
             mcrpc.u[0] = vel
-            mcrpc.u[1] = sim_dtype(0.0)
+            mcrpc.u[1] = wp.float64(0.0)
 
             f = equilibrium_fun(mcrpc)
             return f
@@ -153,7 +153,7 @@ class Functions:
 
     def get_kbc(self):
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -161,27 +161,27 @@ class Functions:
         cc_dev = self.params.cc_dev
 
         # Make constants for warp
-        _f_vec = wp.vec(length=Q, dtype=sim_dtype)
+        _f_vec = wp.vec(length=Q, dtype=wp.float64)
         _pi_dim = D * (D + 1) // 2
-        _pi_vec = wp.vec(_pi_dim, dtype=sim_dtype)
-        epsilon_host = sim_dtype(1e-32)
+        _pi_vec = wp.vec(_pi_dim, dtype=wp.float64)
+        epsilon_host = wp.float64(1e-32)
         epsilon_dev = wp.constant(epsilon_host)
 
         @wp.func
-        def second_moment(fneq: wp.vec(length=Q, dtype=sim_dtype)):
+        def second_moment(fneq: wp.vec(length=Q, dtype=wp.float64)):
             # Get second order moment (a symmetric tensore shaped into a vector)
             pi = _pi_vec()
             for d in range(_pi_dim):
-                pi[d] = sim_dtype(0.0)
+                pi[d] = wp.float64(0.0)
                 for q in range(Q):
                     pi[d] += cc_dev[q, d] * fneq[q]
             return pi
 
         @wp.func
-        def decompose_shear_d2q9(fneq: wp.vec(length=Q, dtype=sim_dtype), ):
+        def decompose_shear_d2q9(fneq: wp.vec(length=Q, dtype=wp.float64), ):
             pi = second_moment(fneq)
             N = pi[0] - pi[2]
-            s = wp.vec(length=Q, dtype=sim_dtype)
+            s = wp.vec(length=Q, dtype=wp.float64)
             s[3] = N
             s[6] = N
             s[2] = -N
@@ -199,30 +199,30 @@ class Functions:
                 feq: typing.Any,
         ):
             e = wp.cw_div(wp.cw_mul(x, y), feq)
-            e_sum = sim_dtype(0.0)
+            e_sum = wp.float64(0.0)
             for i in range(Q):
                 e_sum += e[i]
             return e_sum
 
         @wp.func
-        def kbc(f: wp.vec(length=Q, dtype=sim_dtype),
-                feq: wp.vec(length=Q, dtype=sim_dtype),
+        def kbc(f: wp.vec(length=Q, dtype=wp.float64),
+                feq: wp.vec(length=Q, dtype=wp.float64),
                 mcrpc: typing.Any,
-                omega: sim_dtype):
+                omega: wp.float64):
             # Get second order moment (a symmetric tensore shaped into a vector)
             # Compute shear and delta_s
             fneq = f - feq
 
             shear = decompose_shear_d2q9(fneq)
-            delta_s = shear * mcrpc.rho / sim_dtype(4.0)
+            delta_s = shear * mcrpc.rho / wp.float64(4.0)
 
             # Compute required constants based on the input omega (omega is the inverse relaxation time)
-            _beta = sim_dtype(0.5) * sim_dtype(omega)
-            _inv_beta = sim_dtype(1.0) / _beta
+            _beta = wp.float64(0.5) * wp.float64(omega)
+            _inv_beta = wp.float64(1.0) / _beta
 
             # Perform collision
             delta_h = fneq - delta_s
-            two = sim_dtype(2.0)
+            two = wp.float64(2.0)
             gamma = _inv_beta - (two - _inv_beta) * entropic_scalar_product(delta_s, delta_h, feq) / (
                     epsilon_dev + entropic_scalar_product(delta_h, delta_h, feq)
             )
@@ -234,7 +234,7 @@ class Functions:
 
     def get_bgk(self):
         Macro = self.params.get_macroscopic_type()
-        sim_dtype = self.params.sim_dtype
+        
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -242,19 +242,19 @@ class Functions:
         cc_dev = self.params.cc_dev
 
         # Make constants for warp
-        _f_vec = wp.vec(length=Q, dtype=sim_dtype)
+        _f_vec = wp.vec(length=Q, dtype=wp.float64)
         _pi_dim = D * (D + 1) // 2
-        _pi_vec = wp.vec(_pi_dim, dtype=sim_dtype)
-        epsilon_host = sim_dtype(1e-32)
+        _pi_vec = wp.vec(_pi_dim, dtype=wp.float64)
+        epsilon_host = wp.float64(1e-32)
         epsilon_dev = wp.constant(epsilon_host)
 
         @wp.func
-        def bgk(f: wp.vec(length=Q, dtype=sim_dtype),
-                feq: wp.vec(length=Q, dtype=sim_dtype),
+        def bgk(f: wp.vec(length=Q, dtype=wp.float64),
+                feq: wp.vec(length=Q, dtype=wp.float64),
                 mcrpc: typing.Any,
-                omega: sim_dtype):
+                omega: wp.float64):
             fneq = f - feq
-            fout = f - sim_dtype(omega) * fneq
+            fout = f - wp.float64(omega) * fneq
             return fout
 
         return bgk

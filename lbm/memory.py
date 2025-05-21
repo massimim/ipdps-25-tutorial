@@ -1,14 +1,5 @@
-import numpy as np
 import matplotlib.pyplot as plt
-import warp as wp
 from matplotlib import cm
-from pyevtk.hl import imageToVTK
-import typing
-import numpy as np
-import pyvista as pv
-import warp as wp
-import numpy as np
-import pyvista as pv
 
 import warp as wp
 import numpy as np
@@ -22,12 +13,12 @@ class Memory:
     def __init__(self, parameters: lbm.Parameters):
         self.params = parameters
 
-        self.f_0 = self.help_create_field(self.params.Q, self.params.sim_dtype)
-        self.f_1 = self.help_create_field(self.params.Q, self.params.sim_dtype)
+        self.f_0 = self.help_create_field(self.params.Q, wp.float64)
+        self.f_1 = self.help_create_field(self.params.Q, wp.float64)
 
         self.bc_type = self.help_create_field(cardinality=1, dtype=wp.uint8)
-        self.u = self.help_create_field(cardinality=self.params.D, dtype=self.params.sim_dtype)
-        self.rho = self.help_create_field(cardinality=1, dtype=self.params.sim_dtype)
+        self.u = self.help_create_field(cardinality=self.params.D, dtype=wp.float64)
+        self.rho = self.help_create_field(cardinality=1, dtype=wp.float64)
 
     def help_create_field(self,
                           cardinality: int,
@@ -44,20 +35,20 @@ class Memory:
         return f
 
     def get_read(self):
-        sim_dtype = self.params.sim_dtype
+        
 
         @wp.func
-        def read_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32):
+        def read_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32):
             return field[card, xi, yi]
 
         return read_field
 
     def get_write(self):
-        sim_dtype = self.params.sim_dtype
+        
 
         @wp.func
-        def write_field(field: wp.array3d(dtype=sim_dtype), card: wp.int32, xi: wp.int32, yi: wp.int32,
-                        value: sim_dtype):
+        def write_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32,
+                        value: wp.float64):
             field[card, xi, yi] = value
 
         return write_field
