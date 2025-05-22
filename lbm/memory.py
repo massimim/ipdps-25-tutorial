@@ -3,7 +3,7 @@ from matplotlib import cm
 
 import warp as wp
 import numpy as np
-import pyvista as pv
+#import pyvista as pv
 import lbm
 import os
 import time
@@ -78,11 +78,11 @@ class Memory:
     def __str__(self):
         return f"Memory(f_0={self.f_0}, f_1={self.f_1}, bc_type={self.bc_type}, u={self.u}, rho={self.rho})"
 
-    def export(self, it):
+    def image(self, it):
         if it % self.params.export_frequency == 0:
-            if self.params.export_vtk:
-                self.save_magnituge_vtk(it, prefix=self.params.export_prefix+"_u")
-                return
+            # if self.params.export_vtk:
+            #     self.save_magnituge_vtk(it, prefix=self.params.export_prefix+"_u")
+            #     return
             if self.params.export_img:
                 self.save_magnituge_img(it, prefix=self.params.export_prefix+"_u")
                 return

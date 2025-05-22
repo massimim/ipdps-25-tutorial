@@ -19,6 +19,7 @@ class Parameters:
         self.bc_bulk = wp.uint8(0)
         self.bc_wall = wp.uint8(1)
         self.bc_lid = wp.uint8(2)
+        self.bc_lid_reversed = wp.uint8(3)
 
         # Desired Reynolds number
         # Setting fluid viscosity and relaxation parameter.

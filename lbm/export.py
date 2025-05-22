@@ -3,7 +3,7 @@ from matplotlib import cm
 
 import warp as wp
 import numpy as np
-import pyvista as pv
+#import pyvista as pv
 import lbm
 import os
 import time

@@ -5,10 +5,12 @@ import lbm
 class Kernels:
     def __init__(self, parameters: lbm.Parameters,
                  memory: lbm.Memory,
-                 functions: lbm.Functions):
+                 user_pull_stream = None ):
         self.params = parameters
         self.memory = memory
-        self.functions = functions
+        self.functions = lbm.Functions(parameters)
+        self.stream = lbm.stream.Stream(parameters)
+        self.user_pull_stream = user_pull_stream
 
     def get_equilibrium(self):
         equilibrium_fun = self.functions.get_equilibrium()
@@ -31,7 +33,7 @@ class Kernels:
             index = wp.vec2i(i, j)
             # Get the equilibrium
             u = wp.vector(length=D, dtype=wp.float64)
-            rho = wp.vector(length=1, dtype=wp.float64)
+            rho = wp.vector(length=wp.int32(1), dtype=wp.float64)
 
             for d in range(D):
                 u[d] = read(field=u_in, card=d, xi=index[0], yi=index[1])
@@ -135,7 +137,11 @@ class Kernels:
         return set_f_to_equilibrium
 
     def get_pull_stream(self):
-        pull_stream_fun = self.functions.get_pull_stream()
+        pull_stream_fun = None
+        if self.user_pull_stream is not None:
+            pull_stream_fun = self.user_pull_stream
+        else:
+            pull_stream_fun = self.stream.get_pull_stream()
 
         Macro = self.params.get_macroscopic_type()
         
@@ -205,22 +211,10 @@ class Kernels:
 
     def get_apply_boundary_conditions(self):
         apply_boundary_conditions_fun = self.functions.get_apply_boundary_conditions()
-
-        macroscopic_fun = self.functions.get_macroscopic()
-        pull_stream_fun = self.functions.get_pull_stream()
-
-        equilibrium_fun = self.functions.get_equilibrium()
-
-        Macro = self.params.get_macroscopic_type()
         
         Q = self.params.Q
-        D = self.params.D
 
-        w_dev = self.params.w_dev
-        bc_lid = self.params.bc_lid
-        bc_wall = self.params.bc_wall
         bc_bulk = self.params.bc_bulk
-        prescribed_vel = self.params.prescribed_vel
 
         read = self.memory.get_read()
         write = self.memory.get_write()
@@ -245,22 +239,12 @@ class Kernels:
 
         return apply_boundary_conditions
 
-    def get_set_bc(self):
+    def get_set_lid_problem(self):
 
-        Macro = self.params.get_macroscopic_type()
-        
-        Q = self.params.Q
-        D = self.params.D
-
-        w_dev = self.params.w_dev
         bc_lid = self.params.bc_lid
         bc_wall = self.params.bc_wall
         bc_bulk = self.params.bc_bulk
-        prescribed_vel = self.params.prescribed_vel
         nx, ny = self.params.grid_shape
-
-        read = self.memory.get_read()
-        write = self.memory.get_write()
 
         @wp.kernel
         def set_bc(
@@ -278,5 +262,42 @@ class Kernels:
 
             if j == ny - 1 and (i != 0 and i != nx - 1):
                 bc_type[index[0], index[1]] = bc_lid
+
+        return set_bc
+
+    def get_set_02_problem(self, length:wp.int32):
+
+        bc_lid = self.params.bc_lid
+        bc_lid_reversed = self.params.bc_lid_reversed
+        bc_wall = self.params.bc_wall
+        bc_bulk = self.params.bc_bulk
+        nx, ny = self.params.grid_shape
+        half_len = length // 2
+        @wp.kernel
+        def set_bc(
+                bc_type: wp.array2d(dtype=wp.uint8),
+        ):
+            # Get the global index
+            i, j = wp.tid()
+            index = wp.vec2i(i, j)
+
+            bc_type[index[0], index[1]] = bc_bulk
+
+            if i == 0 or i == 0 or i == nx - 1:
+                bc_type[index[0], index[1]] = bc_wall
+                return
+
+            o = wp.vec2f(wp.float32(nx // 2),wp.float32( ny // 2))
+            p = wp.vec2f(wp.float32(i),wp.float32( j))
+
+            d = wp.norm_l2(p-o)
+            if d < wp.float32(half_len):
+                bc_type[index[0], index[1]] = bc_wall
+                return
+
+            if (j == ny - 1 or j==0)  and (i != 0 and i != nx - 1):
+                bc_type[index[0], index[1]] = bc_lid
+                if i > nx // 2:
+                    bc_type[index[0], index[1]] = bc_lid_reversed
 
         return set_bc

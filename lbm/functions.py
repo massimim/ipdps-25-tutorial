@@ -10,7 +10,7 @@ class Functions:
     def get_equilibrium(self):
 
         Macro = self.params.get_macroscopic_type()
-        
+
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -37,49 +37,15 @@ class Functions:
                 usqr = wp.float64(1.5) * wp.dot(mcrpc.u, mcrpc.u)
 
                 # Compute feq
-                f_out[q] = mcrpc.rho * w_dev[q] * (wp.float64(1.0) + cu * (wp.float64(1.0) + wp.float64(0.5) * cu) - usqr)
+                f_out[q] = mcrpc.rho * w_dev[q] * (
+                            wp.float64(1.0) + cu * (wp.float64(1.0) + wp.float64(0.5) * cu) - usqr)
             return f_out
 
         return equilibrium
 
-    def get_pull_stream(self):
-        
-        Q = self.params.Q
-        D = self.params.D
-        c_dev = self.params.c_dev
-        w_dev = self.params.w_dev
-        nx, ny = self.params.grid_shape
-
-        @wp.func
-        def pull_stream(
-                index: typing.Any,
-                f_mem: wp.array3d(dtype=wp.float64),
-        ):
-
-            f_vec = wp.vec(length=Q, dtype=wp.float64)
-
-            for q in range(Q):
-                pull_ngh = wp.vec2i(0, 0)
-                outside_domain = False
-                for d in range(D):
-                    pull_ngh[d] = index[d] - c_dev[d, q]
-                    # impose periodicity for out of bound values
-                    # if pull_ngh[d] < 0:
-                    #     pull_ngh[d] = f_mem.shape[d + 1] - 1
-                    # elif pull_ngh[d] >= f_mem.shape[d + 1]:
-                    #     pull_ngh[d] = 0
-                    if pull_ngh[d] < 0 or pull_ngh[d] >= f_mem.shape[d + 1]:
-                        outside_domain = True
-                if not outside_domain:
-                    f_vec[q] = f_mem[q, pull_ngh[0], pull_ngh[1]]
-
-            return f_vec
-
-        return pull_stream
-
     def get_macroscopic(self):
         Macro = self.params.get_macroscopic_type()
-        
+
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
@@ -126,11 +92,10 @@ class Functions:
         equilibrium_fun = self.get_equilibrium()
 
         Macro = self.params.get_macroscopic_type()
-        
-        Q = self.params.Q
-        D = self.params.D
         bc_lid = self.params.bc_lid
+        bc_lid_reversed = self.params.bc_lid_reversed
         prescribed_vel = self.params.prescribed_vel
+        nx = self.params.nx
 
         @wp.func
         def apply_boundary_conditions(
@@ -142,6 +107,9 @@ class Functions:
 
             if type == bc_lid:
                 vel = wp.float64(prescribed_vel)
+            if type == bc_lid_reversed:
+                vel = -wp.float64(prescribed_vel)
+
 
             mcrpc.u[0] = vel
             mcrpc.u[1] = wp.float64(0.0)
@@ -153,11 +121,9 @@ class Functions:
 
     def get_kbc(self):
         Macro = self.params.get_macroscopic_type()
-        
+
         Q = self.params.Q
         D = self.params.D
-        c_dev = self.params.c_dev
-        w_dev = self.params.w_dev
         cc_dev = self.params.cc_dev
 
         # Make constants for warp
@@ -234,7 +200,7 @@ class Functions:
 
     def get_bgk(self):
         Macro = self.params.get_macroscopic_type()
-        
+
         Q = self.params.Q
         D = self.params.D
         c_dev = self.params.c_dev
