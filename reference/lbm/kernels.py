@@ -76,9 +76,9 @@ class Kernels:
             i, j = wp.tid()
             index = wp.vec2i(i, j)
             # Get the equilibrium
-            u = wp.vector(length=D, dtype=wp.float64)
-            rho = wp.vector(length=1, dtype=wp.float64)
-            f_post_stream = wp.vector(length=Q, dtype=wp.float64)
+            u = wp.vec(length=D, dtype=wp.float64)
+            rho = wp.vec(length=1, dtype=wp.float64)
+            f_post_stream = wp.vec(length=Q, dtype=wp.float64)
 
             for q in range(Q):
                 f_post_stream[q] = read(field=f, card=q, xi=index[0], yi=index[1])
@@ -142,14 +142,9 @@ class Kernels:
         else:
             pull_stream_fun = self.stream.get_pull_stream()
 
-        Macro = self.params.get_macroscopic_type()
-        
+
         Q = self.params.Q
         D = self.params.D
-
-        w_dev = self.params.w_dev
-        bc_lid = self.params.bc_lid
-        prescribed_vel = self.params.prescribed_vel
 
         write = self.memory.get_write()
 
@@ -205,8 +200,6 @@ class Kernels:
         Q = self.params.Q
 
         bc_bulk = self.params.bc_bulk
-
-        read = self.memory.get_read()
         write = self.memory.get_write()
 
         @wp.kernel

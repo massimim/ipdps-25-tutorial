@@ -111,16 +111,18 @@ class Memory:
 
     def image(self, it):
         wp.synchronize()
-        self.save_magnituge_img(it, prefix=self.params.export_prefix + "_u___")
         if it % self.params.export_frequency == 0:
-            # if self.params.export_vtk:
-            #     self.save_magnituge_vtk(it, prefix=self.params.export_prefix+"_u")
-            #     return
             if self.params.export_img:
                 self.save_magnituge_img(it, prefix=self.params.export_prefix + "_u")
                 return
 
+    def image_forced(self, it):
+        wp.synchronize()
+        self.save_magnituge_img(it, prefix=self.params.export_prefix + "_u")
+        return
+
     def export_final(self, example_name=None):
+        wp.synchronize()
 
         if example_name is None:
             example_name = self.params.export_prefix

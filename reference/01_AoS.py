@@ -4,7 +4,7 @@ from fontTools.varLib.plot import stops
 
 import lbm
 import warp as wp
-
+exercise = "01_AoS"
 
 # define main function
 def main():
@@ -12,8 +12,8 @@ def main():
     wp.clear_kernel_cache()
     # Initialize the parameters
     params = lbm.Parameters(num_steps=1000,
-                            nx=1024 // 2,
-                            ny=768 // 2,
+                            nx=1024 ,
+                            ny=768 ,
                             prescribed_vel=0.5,
                             Re=10000.0)
     print(params)
@@ -39,7 +39,6 @@ def main():
 
     # Initialize the kernels
     kernels = lbm.Kernels(params, mem)
-    print(kernels)
 
     wp.launch(kernels.get_set_lid_problem(),
               dim=params.grid_shape,
@@ -49,12 +48,6 @@ def main():
               dim=params.grid_shape,
               inputs=[mem.bc_type, mem.f_0],
               device="cuda")
-    wp.synchronize()
-    wp.launch(kernels.get_macroscopic(),
-                dim=params.grid_shape,
-                inputs=[mem.f_0, mem.rho, mem.u],
-                device="cuda")
-    mem.image(params.num_steps)
 
 
     # #mem.save_magnituge_vtk(0)
@@ -63,13 +56,11 @@ def main():
                   dim=params.grid_shape,
                   inputs=[mem.f_0, mem.f_1],
                   device="cuda")
-        wp.synchronize()
 
         wp.launch(kernels.get_apply_boundary_conditions(),
                   dim=params.grid_shape,
                   inputs=[mem.bc_type, mem.f_1],
                   device="cuda")
-        wp.synchronize()
 
         wp.launch(kernels.get_collision(kbc=True),
                   dim=params.grid_shape,
@@ -79,30 +70,33 @@ def main():
         # Swap the fields
         mem.f_0, mem.f_1 = mem.f_1, mem.f_0
 
-    # Avoiding the first iteration in the timed loop
+    # Warm up iteration
     iterate()
 
+    # Wait for the warm-up to finish
     wp.synchronize()
-    # add timer
+
+    # Start timer
     start = time.time()
 
-    for it in range(1, params.num_steps + 1):
+    for it in range(params.num_steps ):
         iterate()
 
     wp.synchronize()
     stop = time.time()
 
+    # Compute the macroscopic variables
     wp.launch(kernels.get_macroscopic(),
               dim=params.grid_shape,
               inputs=[mem.f_1, mem.rho, mem.u],
               device="cuda")
-    mem.image(params.num_steps)
+    mem.export_final(exercise)
 
+    # Statistics
     elapsed_time = stop - start
     mlups = params.compute_mlups(elapsed_time)
     print(f"Main loop time: {elapsed_time:5.3f} seconds")
     print(f"MLUPS:          {mlups:5.1f}")
-    mem.export_final('01')
 
     # Export the field to VTI
 
