@@ -10,7 +10,7 @@ import warp as wp
 def main():
     wp.clear_kernel_cache()
     # Initialize the parameters
-    params = lbm.Parameters(num_steps=5000,
+    params = lbm.Parameters(num_steps=100,
                             nx=1024,
                             ny=768,
                             prescribed_vel=0.5,
@@ -30,7 +30,7 @@ def main():
     print(kernels)
 
 
-    wp.launch(kernels.get_set_02_problem(100),
+    wp.launch(kernels.get_set_lid_problem(),
               dim=params.grid_shape,
               inputs=[mem.bc_type],
               device="cuda")
@@ -42,11 +42,11 @@ def main():
                 inputs=[mem.bc_type, mem.f_0],
                 device="cuda")
 
-    wp.launch(kernels.get_macroscopic(),
-                dim=params.grid_shape,
-                inputs=[mem.f_0, mem.rho, mem.u],
-                device="cuda")
-    #mem.save_magnituge_vtk(0)
+    # wp.launch(kernels.get_macroscopic(),
+    #             dim=params.grid_shape,
+    #             inputs=[mem.f_0, mem.rho, mem.u],
+    #             device="cuda")
+    # #mem.save_magnituge_vtk(0)
 
     wp.synchronize()
     # add timer
@@ -87,9 +87,9 @@ def main():
               device="cuda")
     mem.image(params.num_steps)
 
-    enlapsed_time = stop - start
-    mlups =params.compute_mlups(enlapsed_time)
-    print(f"Main loop time: {enlapsed_time:5.3f} seconds")
+    elapsed_time = stop - start
+    mlups =params.compute_mlups(elapsed_time)
+    print(f"Main loop time: {elapsed_time:5.3f} seconds")
     print(f"MLUPS:          {mlups:5.1f}")
     mem.export_final()
 
