@@ -6,7 +6,7 @@ from fontTools.varLib.plot import stops
 import lbm
 import warp as wp
 
-exercise_name = "01_AoS_user"
+exercise_name = "02_SoA_user"
 
 
 # define main function
@@ -21,17 +21,17 @@ def main():
                             Re=10000.0)
     print(params)
 
-    f_0 = wp.zeros(params.grid_shape + (params.Q,), dtype=wp.float64)
-    f_1 = wp.zeros(params.grid_shape + (params.Q,), dtype=wp.float64)
+    f_0 = wp.zeros((params.Q,) + params.grid_shape , dtype=wp.float64)
+    f_1 = wp.zeros((params.Q,) + params.grid_shape, dtype=wp.float64)
 
     @wp.func
     def read_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32):
-        return field[xi, yi, card]
+        return field[card, xi, yi ]
 
     @wp.func
     def write_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32,
                     value: wp.float64):
-        field[xi, yi, card] = value
+        field[card, xi, yi] = value
 
     # Initialize the memory
     mem = lbm.Memory(params,
