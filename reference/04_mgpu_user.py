@@ -98,8 +98,8 @@ def main():
             f_out: wp.array3d(dtype=wp.float64),
     ):
         # Get the global index
-        i, j = wp.tid()
-        partition_index = wp.vec2i(i, j)
+        it, jt = wp.tid()
+        partition_index = wp.vec2i(it, jt)
         domain_index = partition_index + partition.origin
 
         f_post = wp.vec(length=Q, dtype=wp.float64)
@@ -120,7 +120,7 @@ def main():
                 f_post[q] = read_field(field=f_in, card=q, xi=partition_pull_ngh[0], yi=partition_pull_ngh[1])
 
         if bc_type != bc_bulk:
-            f_post = compute_boundaries(partition, bc_type)
+            f_post = compute_boundaries(bc_type)
 
         mcrpc = compute_macroscopic(f_post)
 
@@ -139,11 +139,22 @@ def main():
     lbm_mgpu.export_setup(prefix=exercise_name, params=params, partitions=partitions, mem=mem)
     # #mem.save_magnituge_vtk(0)
     def iterate():
-        wp.launch(fused,
-                  dim=params.grid_shape,
-                  inputs=[params.omega, mem.f_0, mem.bc_type, mem.f_1],
-                  device="cuda")
+        for i , p in enumerate(partitions):
+            for q in range(params.Q):
+                upper_src_offset = p.shape_with_halo[0] * p.shape_with_halo[1] * (q+1) - p.shape_with_halo[0]
+                lower_src_offset = p.shape_with_halo[0] * p.shape_with_halo[1] * q
+                if i != params.num_gpsu - 1:
+                    wp.copy(src=mem.f_0[i+1][q,], dest=mem.f_0[i], dest_offset=upper_src_offset, src_offset=lower_src_offset, count=p.shape_with_halo[0])
+                if i != 0:
+                    wp.copy(src=mem.f_0[i-1], dest=mem.f_0[i], dest_offset=lower_src_offset, src_offset=upper_src_offset, count=p.shape_with_halo[0])
+            wp.synchronize()
 
+        for i , p in enumerate(partitions):
+            wp.launch(fused,
+                      dim=p.shape,
+                      inputs=[p, params.omega, mem.f_0[i], mem.bc_type[i], mem.f_1[i]],
+                      device=params.gpus[i])
+        wp.synchronize()
         # Swap the fields
         mem.f_0, mem.f_1 = mem.f_1, mem.f_0
 
@@ -160,7 +171,7 @@ def main():
     wp.synchronize()
     stop = time.time()
 
-    lbm_mgpu.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
+    lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
 
     # Statistics
     elapsed_time = stop - start
