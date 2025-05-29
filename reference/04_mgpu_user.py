@@ -14,12 +14,12 @@ def main():
     wp.clear_kernel_cache()
     gpus = wp.get_cuda_devices()
     if len(gpus) == 1:
-        gpus = gpus * 2
+        gpus = gpus * 4
         # Initialize the parameters
-    params = lbm_mgpu.Parameters(num_steps=50000,
+    params = lbm_mgpu.Parameters(num_steps=60000,
                                  gpus=gpus ,
-                                 nx=1024//4,
-                                 ny=768//4,
+                                 nx=1024//1,
+                                 ny=768//1,
                                  prescribed_vel=0.5,
                                  Re=10000.0)
 
@@ -29,17 +29,17 @@ def main():
         partition=  lbm_mgpu.Partition()
         partition.id = i
         partition.num_partitions = params.num_gpsu
-        partition.slices_per_partition = params.domain_shape[1] // params.num_gpsu
-        partition.origin[0] = 0
-        partition.origin[1] = i * partition.slices_per_partition
+        partition.slices_per_partition = params.dim[0] // params.num_gpsu
+        partition.origin[0] = i * partition.slices_per_partition
+        partition.origin[1] = 0
 
-        partition.shape[0]= params.domain_shape[0]
-        partition.shape[1] = partition.slices_per_partition
-        partition.shape_domain[0] = params.domain_shape[0]
-        partition.shape_domain[1] = params.domain_shape[1]
+        partition.shape[0]= partition.slices_per_partition
+        partition.shape[1] = params.dim[1]
+        partition.shape_domain[0] = params.dim[0]
+        partition.shape_domain[1] = params.dim[1]
 
-        partition.shape_with_halo[0] = partition.shape[0]
-        partition.shape_with_halo[1] = partition.shape[1] + 2  # Add halo in y direction
+        partition.shape_with_halo[0] = partition.shape[0]+ 2
+        partition.shape_with_halo[1] = partition.shape[1] # Add halo in y direction
 
         partitions.append(partition)
 
@@ -48,7 +48,7 @@ def main():
         for i, partition in enumerate(partitions):
             nx = partition.shape_with_halo[0]
             ny = partition.shape_with_halo[1]
-            f = wp.zeros((params.Q, nx, ny), dtype=wp.float64)
+            f = wp.zeros((params.Q, nx, ny), dtype=wp.float64, device=params.gpus[i])
             fields.append(f)
         return fields
 
@@ -57,12 +57,12 @@ def main():
 
     @wp.func
     def read_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32):
-        return field[card, xi, yi + 1]
+        return field[card, xi+ 1, yi ]
 
     @wp.func
     def write_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32,
                     value: wp.float64):
-        field[card, xi, yi + 1] = value
+        field[card, xi+ 1, yi ] = value
 
     # Initialize the memory
     mem = lbm_mgpu.Memory(params,
@@ -135,19 +135,21 @@ def main():
 
     # ---------------------------------------------------------
     lbm_mgpu.setup_LDC_problem(params=params, partitions=partitions, mem=mem)
-    # lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
+    lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
     lbm_mgpu.export_setup(prefix=exercise_name, params=params, partitions=partitions, mem=mem)
     # #mem.save_magnituge_vtk(0)
     def iterate():
         for i , p in enumerate(partitions):
             for q in range(params.Q):
-                upper_src_offset = p.shape_with_halo[0] * p.shape_with_halo[1] * (q+1) - p.shape_with_halo[0]
-                lower_src_offset = p.shape_with_halo[0] * p.shape_with_halo[1] * q
                 if i != params.num_gpsu - 1:
-                    wp.copy(src=mem.f_0[i+1][q,], dest=mem.f_0[i], dest_offset=upper_src_offset, src_offset=lower_src_offset, count=p.shape_with_halo[0])
+                    src = mem.f_0[i+1][q,1]
+                    dst = mem.f_0[i][q,partition.shape_with_halo[0]-1]
+                    wp.copy(src=src, dest=dst, count=p.shape[1])
                 if i != 0:
-                    wp.copy(src=mem.f_0[i-1], dest=mem.f_0[i], dest_offset=lower_src_offset, src_offset=upper_src_offset, count=p.shape_with_halo[0])
-            wp.synchronize()
+                    src = mem.f_0[i - 1][q, partition.shape_with_halo[0] - 2]
+                    dst = mem.f_0[i][q, 0]
+                    wp.copy(src=src, dest=dst, count=p.shape[1])
+        wp.synchronize()
 
         for i , p in enumerate(partitions):
             wp.launch(fused,

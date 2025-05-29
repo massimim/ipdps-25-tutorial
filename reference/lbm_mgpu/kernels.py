@@ -12,89 +12,89 @@ class Kernels:
         self.stream = lbm_mgpu.stream.Stream(parameters, memory.get_read())
         self.user_pull_stream = user_pull_stream
 
-    def get_equilibrium(self):
-        equilibrium_fun = self.functions.get_equilibrium()
-        
-        Q = self.params.Q
-        D = self.params.D
+    # def get_equilibrium(self):
+    #     equilibrium_fun = self.functions.get_equilibrium()
+    #
+    #     Q = self.params.Q
+    #     D = self.params.D
+    #
+    #     read = self.memory.get_read()
+    #     write = self.memory.get_write()
+    #
+    #     # Construct the warp kernel
+    #     @wp.kernel
+    #     def equilibrium(
+    #             rho_in: wp.array2d(dtype=wp.float64),
+    #             u_in: wp.array3d(dtype=wp.float64),
+    #             f_out: wp.array3d(dtype=wp.float64),
+    #     ):
+    #         # Get the global index
+    #         i, j = wp.tid()
+    #         index = wp.vec2i(i, j)
+    #         # Get the equilibrium
+    #         u = wp.vector(length=D, dtype=wp.float64)
+    #         rho = wp.vector(length=wp.int32(1), dtype=wp.float64)
+    #
+    #         for d in range(D):
+    #             u[d] = u_in[d, index[0], index[1]]
+    #         rho[0] = rho_in[index[0], index[1]]
+    #
+    #         f_eq = equilibrium_fun(rho, u)
+    #
+    #         # Set the output
+    #         for l in range(Q):
+    #             write(field=f_out,
+    #                   card=l,
+    #                   xi=[0],
+    #                   yi=index[1],
+    #                   value=f_eq[l])
+    #
+    #     return equilibrium
 
-        read = self.memory.get_read()
-        write = self.memory.get_write()
-
-        # Construct the warp kernel
-        @wp.kernel
-        def equilibrium(
-                rho_in: wp.array2d(dtype=wp.float64),
-                u_in: wp.array3d(dtype=wp.float64),
-                f_out: wp.array3d(dtype=wp.float64),
-        ):
-            # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
-            # Get the equilibrium
-            u = wp.vector(length=D, dtype=wp.float64)
-            rho = wp.vector(length=wp.int32(1), dtype=wp.float64)
-
-            for d in range(D):
-                u[d] = u_in[d, index[0], index[1]]
-            rho[0] = rho_in[index[0], index[1]]
-
-            f_eq = equilibrium_fun(rho, u)
-
-            # Set the output
-            for l in range(Q):
-                write(field=f_out,
-                      card=l,
-                      xi=[0],
-                      yi=index[1],
-                      value=f_eq[l])
-
-        return equilibrium
-
-    def get_collision(self, kbc=False):
-        equilibrium_fun = self.functions.get_equilibrium()
-        macroscopic_fun = self.functions.get_macroscopic()
-        collision_fun = self.functions.get_kbc()
-        if not kbc:
-            collision_fun = self.functions.get_bgk()
-
-        equilibrium_fun = self.functions.get_equilibrium()
-        
-        Q = self.params.Q
-        D = self.params.D
-
-        read = self.memory.get_read()
-        write = self.memory.get_write()
-
-        # Construct the warp kernel
-        @wp.kernel
-        def collision(
-                f: wp.array3d(dtype=wp.float64),
-                omega: wp.float64,
-        ):
-            # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
-            # Get the equilibrium
-            u = wp.vec(length=D, dtype=wp.float64)
-            rho = wp.vec(length=1, dtype=wp.float64)
-            f_post_stream = wp.vec(length=Q, dtype=wp.float64)
-
-            for q in range(Q):
-                f_post_stream[q] = read(field=f, card=q, xi=index[0], yi=index[1])
-
-            mcrpc = macroscopic_fun(f_post_stream)
-
-            # Compute the equilibrium
-            f_eq = equilibrium_fun(mcrpc)
-
-            f_post_collision = collision_fun(f_post_stream, f_eq, mcrpc, omega)
-
-            # Set the output
-            for q in range(Q):
-                write(field=f, card=q, xi=index[0], yi=index[1], value=f_post_collision[q])
-
-        return collision
+    # def get_collision(self, kbc=False):
+    #     equilibrium_fun = self.functions.get_equilibrium()
+    #     macroscopic_fun = self.functions.get_macroscopic()
+    #     collision_fun = self.functions.get_kbc()
+    #     if not kbc:
+    #         collision_fun = self.functions.get_bgk()
+    #
+    #     equilibrium_fun = self.functions.get_equilibrium()
+    #
+    #     Q = self.params.Q
+    #     D = self.params.D
+    #
+    #     read = self.memory.get_read()
+    #     write = self.memory.get_write()
+    #
+    #     # Construct the warp kernel
+    #     @wp.kernel
+    #     def collision(
+    #             f: wp.array3d(dtype=wp.float64),
+    #             omega: wp.float64,
+    #     ):
+    #         # Get the global index
+    #         i, j = wp.tid()
+    #         index = wp.vec2i(i, j)
+    #         # Get the equilibrium
+    #         u = wp.vec(length=D, dtype=wp.float64)
+    #         rho = wp.vec(length=1, dtype=wp.float64)
+    #         f_post_stream = wp.vec(length=Q, dtype=wp.float64)
+    #
+    #         for q in range(Q):
+    #             f_post_stream[q] = read(field=f, card=q, xi=index[0], yi=index[1])
+    #
+    #         mcrpc = macroscopic_fun(f_post_stream)
+    #
+    #         # Compute the equilibrium
+    #         f_eq = equilibrium_fun(mcrpc)
+    #
+    #         f_post_collision = collision_fun(f_post_stream, f_eq, mcrpc, omega)
+    #
+    #         # Set the output
+    #         for q in range(Q):
+    #             write(field=f, card=q, xi=index[0], yi=index[1], value=f_post_collision[q])
+    #
+    #     return collision
 
 
     def get_set_f_to_equilibrium(self):
@@ -136,33 +136,33 @@ class Kernels:
 
         return set_f_to_equilibrium
 
-    def get_pull_stream(self):
-        pull_stream_fun = None
-        if self.user_pull_stream is not None:
-            pull_stream_fun = self.user_pull_stream
-        else:
-            pull_stream_fun = self.stream.get_pull_stream()
-
-
-        Q = self.params.Q
-        D = self.params.D
-
-        write = self.memory.get_write()
-
-        @wp.kernel
-        def pull_stream(
-                f_in: wp.array3d(dtype=wp.float64),
-                f_out: wp.array3d(dtype=wp.float64),
-        ):
-            # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
-            f_post = pull_stream_fun(index, f_in)
-            # Set the output
-            for q in range(Q):
-                write(field=f_out, card=q, xi=index[0], yi=index[1], value=f_post[q])
-
-        return pull_stream
+    # def get_pull_stream(self):
+    #     pull_stream_fun = None
+    #     if self.user_pull_stream is not None:
+    #         pull_stream_fun = self.user_pull_stream
+    #     else:
+    #         pull_stream_fun = self.stream.get_pull_stream()
+    #
+    #
+    #     Q = self.params.Q
+    #     D = self.params.D
+    #
+    #     write = self.memory.get_write()
+    #
+    #     @wp.kernel
+    #     def pull_stream(
+    #             f_in: wp.array3d(dtype=wp.float64),
+    #             f_out: wp.array3d(dtype=wp.float64),
+    #     ):
+    #         # Get the global index
+    #         i, j = wp.tid()
+    #         index = wp.vec2i(i, j)
+    #         f_post = pull_stream_fun(index, f_in)
+    #         # Set the output
+    #         for q in range(Q):
+    #             write(field=f_out, card=q, xi=index[0], yi=index[1], value=f_post[q])
+    #
+    #     return pull_stream
 
     def get_macroscopic(self):
         macroscopic_fun = self.functions.get_macroscopic()
@@ -179,13 +179,13 @@ class Kernels:
                 u_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
-            it, jt = wp.tid()
-            partition_index = wp.vec2i(it, jt)
+            ix, iy = wp.tid()
+            partition_index = wp.vec2i(ix, iy)
 
             f = wp.vector(length=Q, dtype=wp.float64)
 
             for q in range(Q):
-                f[q] = read(field = f_in, card = q, xi=partition_index[0], yi=partition_index[1])
+                f[q] = read(field = f_in, card = q, xi=ix, yi=iy)
 
             mcrpc = macroscopic_fun(f)
 

@@ -113,7 +113,7 @@ class Memory:
             u = self.u[i].numpy()
             u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
             u_magnitude_list.append(u_magnitude)
-        u_magnitude = np.concatenate(u_magnitude_list, axis=1)
+        u_magnitude = np.concatenate(u_magnitude_list, axis=0)
         self.export.save_image(u_magnitude, timestep, prefix=prefix)
 
     def save_bc_img(self, timestep, prefix):
@@ -121,7 +121,7 @@ class Memory:
         for i, p in enumerate(self.partitions):
             bctype = self.bc_type[i].numpy()
             bctype_list.append(bctype)
-        bctype = np.concatenate(bctype_list, axis=1)
+        bctype = np.concatenate(bctype_list, axis=0)
         self.export.save_image(bctype, timestep, prefix=prefix)
 
     def save_bc_vtk(self, timestep):

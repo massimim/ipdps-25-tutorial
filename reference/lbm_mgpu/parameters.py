@@ -9,12 +9,17 @@ class Parameters:
 
         self.D = 2
         self.Q = 9
-        self.nx = nx
 
-        self.ny = ((ny + self.num_gpsu-1) // self.num_gpsu) * self.num_gpsu
-        self.domain_shape =  wp.vec(length=2, dtype=wp.int32)()
-        self.domain_shape[0] = self.nx
-        self.domain_shape[1] = self.ny
+        self.nx = ((nx + self.num_gpsu-1) // self.num_gpsu) * self.num_gpsu
+        self.ny = ny
+
+        self.dim =  wp.vec(length=2, dtype=wp.int32)()
+        self.dim[0] = self.nx
+        self.dim[1] = self.ny
+
+        self.launch_dim = (self.nx, self.ny)
+
+
         self.num_steps = num_steps
 
         self.export_vtk = False
@@ -31,7 +36,7 @@ class Parameters:
         # Setting fluid viscosity and relaxation parameter.
         self.Re = Re
         self.prescribed_vel = prescribed_vel
-        clength = self.domain_shape[0] - 1
+        clength = self.dim[0] - 1
         visc = prescribed_vel * clength / Re
         self.omega = 1.0 / (3.0 * visc + 0.5)
         # self.omega = 1.0
@@ -74,7 +79,7 @@ class Parameters:
         self.cc_host = help_construct_lattice_moment(self.c_host)
         # print(self.c_host)
 
-        self.domain_shape_dev = wp.constant(wp.vec(length=self.D, dtype=wp.int32)(self.domain_shape))
+        self.dim_dev = wp.constant(wp.vec(length=self.D, dtype=wp.int32)(self.dim))
         self.c_dev = wp.constant(wp.mat((self.D, self.Q), dtype=wp.int32)(self.c_host))
         self.w_dev = wp.constant(wp.vec(self.Q, dtype=wp.float64)(self.w_host))
         self.opp_indices = wp.constant(wp.vec(self.Q, dtype=wp.int32)(self.opp_indices_host))

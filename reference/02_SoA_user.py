@@ -14,11 +14,11 @@ def main():
     debug = False
     wp.clear_kernel_cache()
     # Initialize the parameters
-    params = lbm.Parameters(num_steps=1000,
-                            nx=1024 // 2,
-                            ny=768 // 2,
-                            prescribed_vel=0.5,
-                            Re=10000.0)
+    params = lbm.Parameters(num_steps=5000,
+                                 nx=1024//16,
+                                 ny=768//16,
+                                 prescribed_vel=0.5,
+                                 Re=10000.0)
     print(params)
 
     f_0 = wp.zeros((params.Q, params.nx, params.ny,), dtype=wp.float64)
