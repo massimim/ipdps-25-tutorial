@@ -1,12 +1,8 @@
 import time
-from sys import prefix
-
-from fontTools.varLib.plot import stops
-
 import lbm
 import warp as wp
 
-exercise_name = "02_SoA_user"
+exercise_name = "03_fusion_SoA_user"
 
 
 # define main function
@@ -127,21 +123,51 @@ def main():
     lbm.export_setup(prefix=exercise_name, params=params, mem=mem)
     lbm.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
 
+
+    @wp.kernel
+    def fused(
+            omega: wp.float64,
+            f_in: wp.array3d(dtype=wp.float64),
+            bc_type_field: wp.array2d(dtype=wp.uint8),
+            f_out: wp.array3d(dtype=wp.float64),
+    ):
+        # Get the global index
+        ix, iy = wp.tid()
+        index = wp.vec2i(ix, iy)
+        f_post = wp.vec(length=Q, dtype=wp.float64)
+        bc_type = bc_type_field[ix, iy]
+
+        for q in range(params.Q):
+            pull_ngh = wp.vec2i(0, 0)
+            outside_domain = False
+
+            for d in range(D):
+                pull_ngh[d] = index[d] - c_dev[d, q]
+
+                if pull_ngh[d] < 0 or pull_ngh[d] >= dim_dev[d]:
+                    outside_domain = True
+            if not outside_domain:
+                f_post[q] = read_field(field=f_in, card=q, xi=pull_ngh[0], yi=pull_ngh[1])
+
+        if bc_type != bc_bulk:
+            f_post = compute_boundaries(bc_type)
+
+        mcrpc = compute_macroscopic(f_post)
+
+        # Compute the equilibrium
+        f_eq = compute_equilibrium(mcrpc)
+
+        f_post = compute_collision(f_post, f_eq, mcrpc, omega)
+
+        # Set the output
+        for q in range(params.Q):
+            write_field(field=f_out, card=q, xi=index[0], yi=index[1], value=f_post[q])
+    # ---------------------------------------------------------
     # #mem.save_magnituge_vtk(0)
     def iterate():
-        wp.launch(stream,
+        wp.launch(fused,
                   dim=params.launch_dim,
-                  inputs=[mem.f_0, mem.f_1],
-                  device="cuda")
-
-        wp.launch(apply_boundary_conditions,
-                  dim=params.launch_dim,
-                  inputs=[mem.bc_type, mem.f_1],
-                  device="cuda")
-
-        wp.launch(collide,
-                  dim=params.launch_dim,
-                  inputs=[mem.f_1, params.omega],
+                  inputs=[params.omega, mem.f_0, mem.bc_type, mem.f_1],
                   device="cuda")
 
         # Swap the fields

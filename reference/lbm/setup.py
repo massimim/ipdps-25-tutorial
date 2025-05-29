@@ -7,11 +7,11 @@ def setup_LDC_problem(params, mem):
     kernels = lbm.Kernels(params, mem)
 
     wp.launch(kernels.get_set_lid_problem(),
-              dim=params.grid_shape,
+              dim=params.launch_dim,
               inputs=[mem.bc_type],
               device="cuda")
     wp.launch(kernels.get_set_f_to_equilibrium(),
-              dim=params.grid_shape,
+              dim=params.launch_dim,
               inputs=[mem.bc_type, mem.f_0],
               device="cuda")
     wp.synchronize()
@@ -21,8 +21,14 @@ def export_final(prefix, params, mem, f):
     wp.synchronize()
     kernels = lbm.Kernels(params, mem)
     wp.launch(kernels.get_macroscopic(),
-              dim=mem.params.grid_shape,
+              dim=mem.params.launch_dim,
               inputs=[f, mem.rho, mem.u],
               device="cuda")
     mem.export_final(prefix)
+    wp.synchronize()
+
+def export_setup(prefix, params, mem):
+    # Compute the macroscopic variables
+    wp.synchronize()
+    mem.export_problem_setup(prefix)
     wp.synchronize()

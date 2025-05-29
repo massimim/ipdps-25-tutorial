@@ -16,9 +16,9 @@ class Memory:
                           dtype,
                           fill_value=None):
         if cardinality == 1:
-            shape = self.params.grid_shape
+            shape = (self.params.nx, self.params.ny)
         else:
-            shape = (cardinality,) + self.params.grid_shape
+            shape = (cardinality, self.params.nx, self.params.ny)
         if fill_value is None:
             f = wp.zeros(shape, dtype=dtype)
         else:
@@ -69,7 +69,7 @@ class Memory:
 
         @wp.func
         def read_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32):
-            return field[card, xi, yi]
+            return field[card, yi, xi]
 
         return read_field
 
@@ -83,7 +83,7 @@ class Memory:
         @wp.func
         def write_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32,
                         value: wp.float64):
-            field[card, xi, yi] = value
+            field[card, yi, xi ] = value
 
         return write_field
 
@@ -99,6 +99,10 @@ class Memory:
         u = self.u.numpy()
         u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
         self.export.save_image(u_magnitude, timestep, prefix=prefix)
+
+    def save_bc_img(self, timestep, prefix):
+        bc_type = self.bc_type.numpy()
+        self.export.save_image(bc_type, timestep, prefix=prefix)
 
     def save_bc_vtk(self, timestep):
         bc_type = self.bc_type.numpy()
@@ -128,3 +132,11 @@ class Memory:
             example_name = self.params.export_prefix
 
         self.save_magnituge_img(self.params.num_steps, prefix=example_name + "_u")
+
+    def export_problem_setup(self, example_name=None):
+        wp.synchronize()
+
+        if example_name is None:
+            example_name = self.params.export_prefix
+
+        self.save_bc_img(0, prefix=example_name + "_bc")

@@ -9,3 +9,4 @@ from .kernels import Kernels
 from .export import Export
 from .setup import setup_LDC_problem
 from .setup import export_final
+from .setup import export_setup

@@ -15,14 +15,14 @@ def main():
     wp.clear_kernel_cache()
     # Initialize the parameters
     params = lbm.Parameters(num_steps=1000,
-                            nx=1024 *4,
-                            ny=768 *4,
+                            nx=1024 //2,
+                            ny=768 //2,
                             prescribed_vel=0.5,
                             Re=10000.0)
     print(params)
 
-    f_0 = wp.zeros(params.grid_shape + (params.Q,), dtype=wp.float64)
-    f_1 = wp.zeros(params.grid_shape + (params.Q,), dtype=wp.float64)
+    f_0 = wp.zeros((params.nx, params.ny, params.Q), dtype=wp.float64)
+    f_1 = wp.zeros((params.nx, params.ny, params.Q), dtype=wp.float64)
 
     @wp.func
     def read_field(field: wp.array3d(dtype=wp.float64), card: wp.int32, xi: wp.int32, yi: wp.int32):
@@ -44,12 +44,11 @@ def main():
     functions = lbm.Functions(params)
     kernels = lbm.Kernels(params, mem)
 
-
     Q = params.Q
     D = params.D
     bc_bulk = params.bc_bulk
     c_dev = params.c_dev
-    shape_dev = params.shape_dev
+    dim_dev = params.dim_dev
 
     @wp.kernel
     def stream(
@@ -57,8 +56,8 @@ def main():
             f_out: wp.array3d(dtype=wp.float64),
     ):
         # Get the global index
-        i, j = wp.tid()
-        index = wp.vec2i(i, j)
+        ix, iy = wp.tid()
+        index = wp.vec2i(ix, iy)
         f_post = wp.vec(length=Q, dtype=wp.float64)
 
         for q in range(params.Q):
@@ -68,7 +67,7 @@ def main():
             for d in range(D):
                 pull_ngh[d] = index[d] - c_dev[d, q]
 
-                if pull_ngh[d] < 0 or pull_ngh[d] >= shape_dev[d]:
+                if pull_ngh[d] < 0 or pull_ngh[d] >= dim_dev[d]:
                     outside_domain = True
             if not outside_domain:
                 f_post[q] = read_field(field=f_in, card=q, xi=pull_ngh[0], yi=pull_ngh[1])
@@ -77,25 +76,24 @@ def main():
         for q in range(params.Q):
             write_field(field=f_out, card=q, xi=index[0], yi=index[1], value=f_post[q])
 
-
     compute_boundaries = functions.get_apply_boundary_conditions()
+
     @wp.kernel
     def apply_boundary_conditions(
             bc_type_field: wp.array2d(dtype=wp.uint8),
             f_out: wp.array3d(dtype=wp.float64),
     ):
         # Get the global index
-        i, j = wp.tid()
-        index = wp.vec2i(i, j)
+        ix, iy = wp.tid()
 
-        bc_type = bc_type_field[index[0], index[1]]
+        bc_type = bc_type_field[ix, iy]
         if bc_type == bc_bulk:
             return
 
         f = compute_boundaries(bc_type)
 
         for q in range(params.Q):
-            write_field(field=f_out, card=q, xi=index[0], yi=index[1], value=f[q])
+            write_field(field=f_out, card=q, xi=ix, yi=iy, value=f[q])
 
     compute_macroscopic = functions.get_macroscopic()
     compute_equilibrium = functions.get_equilibrium()
@@ -107,13 +105,12 @@ def main():
             omega: wp.float64,
     ):
         # Get the global index
-        i, j = wp.tid()
-        index = wp.vec2i(i, j)
+        ix, iy = wp.tid()
         # Get the equilibrium
 
         f_post_stream = wp.vec(length=Q, dtype=wp.float64)
         for q in range(params.Q):
-            f_post_stream[q] = read_field(field=f, card=q, xi=index[0], yi=index[1])
+            f_post_stream[q] = read_field(field=f, card=q, xi=ix, yi=iy)
 
         mcrpc = compute_macroscopic(f_post_stream)
 
@@ -124,24 +121,26 @@ def main():
 
         # Set the output
         for q in range(params.Q):
-            write_field(field=f, card=q, xi=index[0], yi=index[1], value=f_post_collision[q])
+            write_field(field=f, card=q, xi=ix, yi=iy, value=f_post_collision[q])
 
     lbm.setup_LDC_problem(params=params, mem=mem)
+    lbm.export_setup(prefix=exercise_name, params=params, mem=mem)
+    lbm.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
 
     # #mem.save_magnituge_vtk(0)
     def iterate():
         wp.launch(stream,
-                  dim=params.grid_shape,
+                  dim=params.launch_dim,
                   inputs=[mem.f_0, mem.f_1],
                   device="cuda")
 
         wp.launch(apply_boundary_conditions,
-                  dim=params.grid_shape,
+                  dim=params.launch_dim,
                   inputs=[mem.bc_type, mem.f_1],
                   device="cuda")
 
         wp.launch(collide,
-                  dim=params.grid_shape,
+                  dim=params.launch_dim,
                   inputs=[mem.f_1, params.omega],
                   device="cuda")
 
@@ -161,12 +160,12 @@ def main():
     wp.synchronize()
     stop = time.time()
 
-    lbm.export_final(prefix = exercise_name, params=params, mem=mem, f=mem.f_0)
-
+    lbm.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
 
     # Statistics
     elapsed_time = stop - start
     mlups = params.compute_mlups(elapsed_time)
+    print(f"Exercise: {exercise_name}")
     print(f"Main loop time: {elapsed_time:5.3f} seconds")
     print(f"MLUPS:          {mlups:5.1f}")
 

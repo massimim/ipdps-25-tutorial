@@ -253,7 +253,6 @@ class Kernels:
 
             if j == ny - 1 and (i != 0 and i != nx - 1):
                 bc_type[partition_index[0], partition_index[1]] = bc_lid
-
         return set_bc
 
     def get_set_02_problem(self, length:wp.int32):

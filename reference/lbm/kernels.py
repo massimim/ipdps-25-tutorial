@@ -116,14 +116,13 @@ class Kernels:
                 f: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            ix, iy = wp.tid()
 
             # Set the output
             for q in range(Q):
-                write(field=f, card=q, xi=index[0], yi=index[1], value=w_dev[q])
+                write(field=f, card=q, xi=ix, yi=iy, value=w_dev[q])
 
-            if bc_type[index[0], index[1]] == bc_lid:
+            if bc_type[iy, ix] == bc_lid:
                 mcrpc = Macro()
                 mcrpc.rho = wp.float64(1.0)
                 mcrpc.u[0] = wp.float64(prescribed_vel)
@@ -131,7 +130,7 @@ class Kernels:
 
                 f_eq = equilibrium_fun(mcrpc)
                 for q in range(Q):
-                    write(field=f, card=q, xi=index[0], yi=index[1], value=f_eq[q])
+                    write(field=f, card=q, xi=ix, yi=iy, value=f_eq[q])
 
         return set_f_to_equilibrium
 
@@ -177,20 +176,19 @@ class Kernels:
                 u_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            ix, iy = wp.tid()
 
             f = wp.vector(length=Q, dtype=wp.float64)
 
             for q in range(Q):
-                f[q] = read(field = f_in, card = q, xi=index[0], yi=index[1])
+                f[q] = read(field = f_in, card = q, xi=ix, yi=iy)
 
             mcrpc = macroscopic_fun(f)
 
             for d in range(D):
-                u_out[d, index[0], index[1]] = mcrpc.u[d]
+                u_out[d, ix,iy] = mcrpc.u[d]
 
-            rho_out[index[0], index[1]] = mcrpc.rho
+            rho_out[ix, iy] = mcrpc.rho
 
         return macroscopic
 
@@ -227,24 +225,24 @@ class Kernels:
         bc_lid = self.params.bc_lid
         bc_wall = self.params.bc_wall
         bc_bulk = self.params.bc_bulk
-        nx, ny = self.params.grid_shape
+        nx, ny = self.params.dim
 
         @wp.kernel
         def set_bc(
                 bc_type: wp.array2d(dtype=wp.uint8),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            ix, iy = wp.tid()
+            #wp.printf("Setting lid at %d, %d\n", ix, iy)
 
-            bc_type[index[0], index[1]] = bc_bulk
+            bc_type[ix, iy ] = bc_bulk
 
-            if i == 0 or j == 0 or i == nx - 1:
-                bc_type[index[0], index[1]] = bc_wall
+            if ix == 0 or iy == 0 or ix == nx - 1:
+                bc_type[ix, iy] = bc_wall
                 return
 
-            if j == ny - 1 and (i != 0 and i != nx - 1):
-                bc_type[index[0], index[1]] = bc_lid
+            if iy == ny - 1 and (ix != 0 and ix != nx - 1):
+                bc_type[ix, iy] = bc_lid
 
         return set_bc
 
