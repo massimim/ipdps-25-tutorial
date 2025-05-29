@@ -5,7 +5,7 @@ from PIL.SpiderImagePlugin import iforms
 import lbm_mgpu
 import warp as wp
 
-exercise_name = "03_fusion_user"
+exercise_name = "04_mgpu_user"
 
 
 # define main function
@@ -17,31 +17,38 @@ def main():
         gpus = gpus * 2
         # Initialize the parameters
     params = lbm_mgpu.Parameters(num_steps=50000,
-                                 gpus=gpus * 2,
-                                 nx=1024,
-                                 ny=768,
+                                 gpus=gpus ,
+                                 nx=1024//4,
+                                 ny=768//4,
                                  prescribed_vel=0.5,
                                  Re=10000.0)
 
-    partitions = [lbm_mgpu.Partition] * len(gpus)
+    partitions = [ ]
 
-    for i, partition in enumerate(partitions):
+    for i in range(params.num_gpsu):
+        partition=  lbm_mgpu.Partition()
         partition.id = i
-        partition.num_partitions = len(partitions)
-        partition.slices_per_partition = params.domain_shape[1] // len(partitions)
-        partition.origin = i * partition.slices_per_partition
+        partition.num_partitions = params.num_gpsu
+        partition.slices_per_partition = params.domain_shape[1] // params.num_gpsu
+        partition.origin[0] = 0
+        partition.origin[1] = i * partition.slices_per_partition
 
-        partition.shape = params.domain_shape
+        partition.shape[0]= params.domain_shape[0]
         partition.shape[1] = partition.slices_per_partition
-        partition.shape_domain = params.domain_shape
+        partition.shape_domain[0] = params.domain_shape[0]
+        partition.shape_domain[1] = params.domain_shape[1]
 
-        partition.shape_with_halo = partition.shape
-        partition.shape_with_halo[2] = partition.shape[2] + 2  # Add halo in y direction
+        partition.shape_with_halo[0] = partition.shape[0]
+        partition.shape_with_halo[1] = partition.shape[1] + 2  # Add halo in y direction
+
+        partitions.append(partition)
 
     def get_fields(partitions):
         fields = []
         for i, partition in enumerate(partitions):
-            f = wp.zeros((params.Q,) + partition.shape_with_halo, dtype=wp.float64)
+            nx = partition.shape_with_halo[0]
+            ny = partition.shape_with_halo[1]
+            f = wp.zeros((params.Q, nx, ny), dtype=wp.float64)
             fields.append(f)
         return fields
 
@@ -128,7 +135,8 @@ def main():
 
     # ---------------------------------------------------------
     lbm_mgpu.setup_LDC_problem(params=params, partitions=partitions, mem=mem)
-
+    lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
+    lbm_mgpu.export_setup(prefix=exercise_name, params=params, partitions=partitions, mem=mem)
     # #mem.save_magnituge_vtk(0)
     def iterate():
         wp.launch(fused,
@@ -152,7 +160,7 @@ def main():
     wp.synchronize()
     stop = time.time()
 
-    lbm.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
+    lbm_mgpu.export_final(prefix=exercise_name, params=params, mem=mem, f=mem.f_0)
 
     # Statistics
     elapsed_time = stop - start

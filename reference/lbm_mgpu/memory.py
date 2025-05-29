@@ -21,9 +21,13 @@ class Memory:
             if cardinality == 1:
                 shape = partition.shape
             elif cardinality == 2:
-                shape = (cardinality,) + partition.shape
+                nx = partition.shape[0]
+                ny = partition.shape[1]
+                shape = (cardinality, nx, ny)
             else:
-                shape = (cardinality,) + partition.shape_with_halo
+                nx = partition.shape_with_halo[0]
+                ny = partition.shape_with_halo[1]
+                shape = (cardinality, nx, ny)
             if fill_value is None:
                 f = wp.zeros(shape, dtype=dtype)
             else:
@@ -49,6 +53,7 @@ class Memory:
         """
         self.params = parameters
         self.export = lbm.Export(self.params)
+        self.partitions = partitions
 
         if f_0 is None:
             self.f_0 = self.help_create_field(self.params.Q, wp.float64)
@@ -60,9 +65,9 @@ class Memory:
         else:
             self.f_1 = f_1
 
-        self.bc_type = self.help_create_field(cardinality=1, dtype=wp.uint8)
-        self.u = self.help_create_field(cardinality=self.params.D, dtype=wp.float64)
-        self.rho = self.help_create_field(cardinality=1, dtype=wp.float64)
+        self.bc_type = self.help_create_field(self.partitions, cardinality=1, dtype=wp.uint8)
+        self.u = self.help_create_field(self.partitions, cardinality=self.params.D, dtype=wp.float64)
+        self.rho = self.help_create_field(self.partitions, cardinality=1, dtype=wp.float64)
 
         self.read_fun = read
         self.write_fun = write
@@ -103,9 +108,22 @@ class Memory:
         self.export.save_fields_vtk(fields, timestep, prefix=prefix)
 
     def save_magnituge_img(self, timestep, prefix):
-        u = self.u.numpy()
-        u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
+        u_magnitude_list = []
+        for i, p in enumerate(self.partitions):
+            u = self.u[i].numpy()
+            u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
+            u_magnitude_list.append(u_magnitude)
+        u_magnitude = np.concatenate(u_magnitude_list, axis=1)
         self.export.save_image(u_magnitude, timestep, prefix=prefix)
+
+    def save_bc_img(self, timestep, prefix):
+        bctype_list = []
+        for i, p in enumerate(self.partitions):
+            bctype = self.bc_type[i].numpy()
+            u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
+            bctype.append(bctype)
+        bctype = np.concatenate(bctype_list, axis=1)
+        self.export.save_image(bctype, timestep, prefix=prefix)
 
     def save_bc_vtk(self, timestep):
         bc_type = self.bc_type.numpy()
@@ -135,3 +153,11 @@ class Memory:
             example_name = self.params.export_prefix
 
         self.save_magnituge_img(self.params.num_steps, prefix=example_name + "_u")
+
+    def export_problem_setup(self, example_name=None):
+        wp.synchronize()
+
+        if example_name is None:
+            example_name = self.params.export_prefix
+
+        self.save_magnituge_img(0, prefix=example_name + "_bc")

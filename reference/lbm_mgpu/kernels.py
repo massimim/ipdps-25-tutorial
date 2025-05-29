@@ -1,15 +1,15 @@
 import warp as wp
-import lbm
+import lbm_mgpu 
 
 
 class Kernels:
-    def __init__(self, parameters: lbm.Parameters,
-                 memory: lbm.Memory,
+    def __init__(self, parameters: lbm_mgpu.Parameters,
+                 memory: lbm_mgpu.Memory,
                  user_pull_stream = None ):
         self.params = parameters
         self.memory = memory
-        self.functions = lbm.Functions(parameters)
-        self.stream = lbm.stream.Stream(parameters, memory.get_read())
+        self.functions = lbm_mgpu.Functions(parameters)
+        self.stream = lbm_mgpu.stream.Stream(parameters, memory.get_read())
         self.user_pull_stream = user_pull_stream
 
     def get_equilibrium(self):
@@ -112,12 +112,13 @@ class Kernels:
         write = self.memory.get_write()
         @wp.kernel
         def set_f_to_equilibrium(
+                partition: lbm_mgpu.Partition,
                 bc_type: wp.array2d(dtype=wp.uint8),
                 f: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            it, jt= wp.tid()
+            index = wp.vec2i(it, jt)
 
             # Set the output
             for q in range(Q):
@@ -172,25 +173,26 @@ class Kernels:
 
         @wp.kernel
         def macroscopic(
+                partition: lbm_mgpu.Partition,
                 f_in: wp.array3d(dtype=wp.float64),
                 rho_out: wp.array2d(dtype=wp.float64),
                 u_out: wp.array3d(dtype=wp.float64),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            it, jt = wp.tid()
+            partition_index = wp.vec2i(it, jt)
 
             f = wp.vector(length=Q, dtype=wp.float64)
 
             for q in range(Q):
-                f[q] = read(field = f_in, card = q, xi=index[0], yi=index[1])
+                f[q] = read(field = f_in, card = q, xi=partition_index[0], yi=partition_index[1])
 
             mcrpc = macroscopic_fun(f)
 
             for d in range(D):
-                u_out[d, index[0], index[1]] = mcrpc.u[d]
+                u_out[d, partition_index[0], partition_index[1]] = mcrpc.u[d]
 
-            rho_out[index[0], index[1]] = mcrpc.rho
+            rho_out[partition_index[0], partition_index[1]] = mcrpc.rho
 
         return macroscopic
 
@@ -222,29 +224,35 @@ class Kernels:
 
         return apply_boundary_conditions
 
-    def get_set_lid_problem(self):
+    def get_set_lid_problem(self, inttt):
 
         bc_lid = self.params.bc_lid
         bc_wall = self.params.bc_wall
         bc_bulk = self.params.bc_bulk
-        nx, ny = self.params.grid_shape
 
         @wp.kernel
         def set_bc(
+                partition: lbm_mgpu.Partition,
                 bc_type: wp.array2d(dtype=wp.uint8),
         ):
             # Get the global index
-            i, j = wp.tid()
-            index = wp.vec2i(i, j)
+            it, jt = wp.tid()
+            partition_index = wp.vec2i(it, jt)
+            domain_index = partition_index + partition.origin
 
-            bc_type[index[0], index[1]] = bc_bulk
+            i = domain_index[0]
+            j = domain_index[1]
+            nx = partition.shape_domain[0]
+            ny = partition.shape_domain[1]
+
+            bc_type[partition_index[0], partition_index[1]] = bc_bulk
 
             if i == 0 or j == 0 or i == nx - 1:
-                bc_type[index[0], index[1]] = bc_wall
+                bc_type[partition_index[0], partition_index[1]] = bc_wall
                 return
 
             if j == ny - 1 and (i != 0 and i != nx - 1):
-                bc_type[index[0], index[1]] = bc_lid
+                bc_type[partition_index[0], partition_index[1]] = bc_lid
 
         return set_bc
 

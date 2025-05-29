@@ -11,8 +11,10 @@ class Parameters:
         self.Q = 9
         self.nx = nx
 
-        self.ny = ((ny + self.num_gpsu) // self.num_gpsu) * self.num_gpsu
-        self.domain_shape = (nx, ny)
+        self.ny = ((ny + self.num_gpsu-1) // self.num_gpsu) * self.num_gpsu
+        self.domain_shape =  wp.vec(length=2, dtype=wp.int32)()
+        self.domain_shape[0] = self.nx
+        self.domain_shape[1] = self.ny
         self.num_steps = num_steps
 
         self.export_vtk = False

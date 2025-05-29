@@ -1,5 +1,6 @@
 import warp as wp
 
+from .partition import Partition
 from .macroscopic import Macroscopic
 from .parameters import Parameters
 from .memory import Memory
@@ -9,4 +10,4 @@ from .kernels import Kernels
 from .export import Export
 from .setup import setup_LDC_problem
 from .setup import export_final
-from .partition import Partition
+from .setup import export_setup
