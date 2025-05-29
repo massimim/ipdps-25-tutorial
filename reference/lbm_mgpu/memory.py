@@ -120,8 +120,7 @@ class Memory:
         bctype_list = []
         for i, p in enumerate(self.partitions):
             bctype = self.bc_type[i].numpy()
-            u_magnitude = (u[0] ** 2 + u[1] ** 2) ** 0.5
-            bctype.append(bctype)
+            bctype_list.append(bctype)
         bctype = np.concatenate(bctype_list, axis=1)
         self.export.save_image(bctype, timestep, prefix=prefix)
 
@@ -160,4 +159,4 @@ class Memory:
         if example_name is None:
             example_name = self.params.export_prefix
 
-        self.save_magnituge_img(0, prefix=example_name + "_bc")
+        self.save_bc_img(0, prefix=example_name + "_bc")

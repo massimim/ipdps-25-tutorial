@@ -135,7 +135,7 @@ def main():
 
     # ---------------------------------------------------------
     lbm_mgpu.setup_LDC_problem(params=params, partitions=partitions, mem=mem)
-    lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
+    # lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
     lbm_mgpu.export_setup(prefix=exercise_name, params=params, partitions=partitions, mem=mem)
     # #mem.save_magnituge_vtk(0)
     def iterate():
