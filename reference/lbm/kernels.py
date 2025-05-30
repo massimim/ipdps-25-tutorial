@@ -37,7 +37,7 @@ class Kernels:
             for q in range(Q):
                 write(field=f, card=q, xi=ix, yi=iy, value=w_dev[q])
 
-            if bc_type[iy, ix] == bc_lid:
+            if bc_type[ix, iy] == bc_lid:
                 mcrpc = Macro()
                 mcrpc.rho = wp.float64(1.0)
                 mcrpc.u[0] = wp.float64(prescribed_vel)
