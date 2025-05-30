@@ -14,7 +14,7 @@ def main():
     debug = False
     wp.clear_kernel_cache()
     # Initialize the parameters
-    params = lbm.Parameters(num_steps=1000,
+    params = lbm.Parameters(num_steps=1,
                             nx=1024 //2,
                             ny=768 //2,
                             prescribed_vel=0.5,
