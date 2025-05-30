@@ -53,7 +53,8 @@ def main():
         for dst_gpu in params.gpus:
             if wp.is_peer_access_supported(src_gpu, dst_gpu):
                 wp.set_peer_access_enabled(src_gpu, dst_gpu, True)
-
+            if wp.is_peer_access_enabled(src_gpu, dst_gpu):
+                print(f"peer access {src_gpu}->{dst_gpu}")
 
     def get_fields(partitions):
         fields = []
@@ -227,6 +228,13 @@ def main():
     # #mem.save_magnituge_vtk(0)
     def iterate():
         for i, p in enumerate(partitions):
+            wp.launch(green,
+                      dim=p.shape_green,
+                      inputs=[p, params.omega, mem.f_0[i], mem.bc_type[i], mem.f_1[i]],
+                      device=params.gpus[i],
+                      stream=streams_compute_green[i])
+
+        for i, p in enumerate(partitions):
             for q in range(params.Q):
                 if i != params.num_gpsu - 1:
                     src = mem.f_0[i + 1][q, 1]
@@ -240,12 +248,7 @@ def main():
             streams_halo_pull_left[i].record_event(events_halo_left[i])
             streams_halo_pull_right[i].record_event(events_halo_right[i])
 
-        for i, p in enumerate(partitions):
-            wp.launch(green,
-                      dim=p.shape_green,
-                      inputs=[p, params.omega, mem.f_0[i], mem.bc_type[i], mem.f_1[i]],
-                      device=params.gpus[i],
-                      stream=streams_compute_green[i])
+
 
         for i, p in enumerate(partitions):
 
@@ -253,7 +256,7 @@ def main():
             streams_compute_red[i].wait_event(events_halo_right[i])
 
             wp.launch(red,
-                      dim=p.shape_green,
+                      dim=p.shape_red,
                       inputs=[p, params.omega, mem.f_0[i], mem.bc_type[i], mem.f_1[i]],
                       device=params.gpus[i],
                       stream=streams_compute_red[i])
