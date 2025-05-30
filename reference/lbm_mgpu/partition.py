@@ -10,3 +10,5 @@ class Partition:
     shape: wp.vec(length=2, dtype=wp.int32)
     shape_with_halo: wp.vec(length=2, dtype=wp.int32)
     shape_domain: wp.vec(length=2, dtype=wp.int32)
+    shape_red: wp.vec(length=2, dtype=wp.int32)
+    shape_green: wp.vec(length=2, dtype=wp.int32)
