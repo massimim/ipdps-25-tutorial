@@ -29,9 +29,9 @@ class Memory:
                 ny = partition.shape_with_halo[1]
                 shape = (cardinality, nx, ny)
             if fill_value is None:
-                f = wp.zeros(shape, dtype=dtype)
+                f = wp.zeros(shape, dtype=dtype, device=self.params.gpus[i])
             else:
-                f = wp.full(shape, fill_value, dtype=dtype)
+                f = wp.full(shape, fill_value, dtype=dtype,device=self.params.gpus[i])
             fields.append(f)
         return fields
 
