@@ -49,6 +49,12 @@ def main():
 
         partitions.append(partition)
 
+    for src_gpu in params.gpus:
+        for dst_gpu in params.gpus:
+            if wp.is_peer_access_supported(src_gpu, dst_gpu):
+                wp.set_peer_access_enabled(src_gpu, dst_gpu, True)
+
+
     def get_fields(partitions):
         fields = []
         for i, partition in enumerate(partitions):
