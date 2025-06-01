@@ -1,5 +1,6 @@
 import warp as wp
 
+from .partition import Partition
 from .macroscopic import Macroscopic
 from .parameters import Parameters
 from .memory import Memory

@@ -1,11 +1,11 @@
 import typing
 import warp as wp
-import lbm
+import lbm_mgpu
 from numpy.ma.core import shape
 
 
 class Stream:
-    def __init__(self, parameters: lbm.Parameters,
+    def __init__(self, parameters: lbm_mgpu.Parameters,
                  read_field):
         self.params = parameters
         self.read_field = read_field

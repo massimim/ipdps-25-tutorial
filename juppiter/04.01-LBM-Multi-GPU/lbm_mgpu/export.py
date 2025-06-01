@@ -4,13 +4,13 @@ from matplotlib import cm
 import warp as wp
 import numpy as np
 #import pyvista as pv
-import lbm
+import lbm_mgpu
 import os
 import time
 
 
 class Export:
-    def __init__(self, parameters: lbm.Parameters):
+    def __init__(self, parameters: lbm_mgpu.Parameters):
         self.params = parameters
 
     def save_image(self, fld, timestep=None, prefix=None, **kwargs):

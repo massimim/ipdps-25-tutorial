@@ -3,13 +3,23 @@ import numpy as np
 
 
 class Parameters:
-    def __init__(self, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05):
+    def __init__(self, gpus, nx=128, ny=128, num_steps=2000, Re=200.0, prescribed_vel=0.05):
+        self.gpus = gpus
+        self.num_gpsu = len(gpus)
+
         self.D = 2
         self.Q = 9
-        self.nx = nx
+
+        self.nx = ((nx + self.num_gpsu-1) // self.num_gpsu) * self.num_gpsu
         self.ny = ny
-        self.dim = wp.vec(length=2, dtype=wp.int32)(self.nx, self.ny)
+
+        self.dim =  wp.vec(length=2, dtype=wp.int32)()
+        self.dim[0] = self.nx
+        self.dim[1] = self.ny
+
         self.launch_dim = (self.nx, self.ny)
+
+
         self.num_steps = num_steps
 
         self.export_vtk = False
@@ -29,7 +39,7 @@ class Parameters:
         clength = self.dim[0] - 1
         visc = prescribed_vel * clength / Re
         self.omega = 1.0 / (3.0 * visc + 0.5)
-        #self.omega = 1.0
+        # self.omega = 1.0
 
         def help_construct_opposite_indices(c_host):
             c = c_host.T
@@ -75,9 +85,8 @@ class Parameters:
         self.opp_indices = wp.constant(wp.vec(self.Q, dtype=wp.int32)(self.opp_indices_host))
         self.cc_dev = wp.constant(wp.mat((self.Q, self.D * (self.D + 1) // 2), dtype=wp.float64)(self.cc_host))
 
-
     def get_macroscopic_type(self):
-        
+
         D = self.D
 
         @wp.struct

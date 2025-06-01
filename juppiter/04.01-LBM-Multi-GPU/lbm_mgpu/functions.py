@@ -1,10 +1,9 @@
 import typing
 import warp as wp
-import lbm
-
+import lbm_mgpu
 
 class Functions:
-    def __init__(self, parameters: lbm.Parameters):
+    def __init__(self, parameters: lbm_mgpu.Parameters):
         self.params = parameters
 
     def get_equilibrium(self):
@@ -197,30 +196,3 @@ class Functions:
             return fout
 
         return kbc
-
-    # def get_bgk(self):
-    #     Macro = self.params.get_macroscopic_type()
-    #
-    #     Q = self.params.Q
-    #     D = self.params.D
-    #     c_dev = self.params.c_dev
-    #     w_dev = self.params.w_dev
-    #     cc_dev = self.params.cc_dev
-    #
-    #     # Make constants for warp
-    #     _f_vec = wp.vec(length=Q, dtype=wp.float64)
-    #     _pi_dim = D * (D + 1) // 2
-    #     _pi_vec = wp.vec(_pi_dim, dtype=wp.float64)
-    #     epsilon_host = wp.float64(1e-32)
-    #     epsilon_dev = wp.constant(epsilon_host)
-    #
-    #     @wp.func
-    #     def bgk(f: wp.vec(length=Q, dtype=wp.float64),
-    #             feq: wp.vec(length=Q, dtype=wp.float64),
-    #             mcrpc: typing.Any,
-    #             omega: wp.float64):
-    #         fneq = f - feq
-    #         fout = f - wp.float64(omega) * fneq
-    #         return fout
-    #
-    #     return bgk
