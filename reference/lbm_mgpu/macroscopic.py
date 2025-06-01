@@ -1,5 +1,4 @@
 import warp as wp
-import lbm
 
 @wp.struct
 class Macroscopic:

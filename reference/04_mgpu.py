@@ -16,7 +16,7 @@ def main():
     if len(gpus) == 1:
         gpus = gpus * 4
         # Initialize the parameters
-    params = lbm_mgpu.Parameters(num_steps=60000,
+    params = lbm_mgpu.Parameters(num_steps=600,
                                  gpus=gpus ,
                                  nx=1024//1,
                                  ny=768//1,
@@ -175,11 +175,14 @@ def main():
 
     lbm_mgpu.export_final(prefix=exercise_name, params=params, partitions=partitions, mem=mem, f=mem.f_0)
 
-    # Statistics
+    # Printing some statistics.
     elapsed_time = stop - start
     mlups = params.compute_mlups(elapsed_time)
+    print(f"--------------------------------------------")
+    print(f"Exercise: {exercise_name}")
     print(f"Main loop time: {elapsed_time:5.3f} seconds")
     print(f"MLUPS:          {mlups:5.1f}")
+    print(f"--------------------------------------------")
 
 
 # call the main when the script is called

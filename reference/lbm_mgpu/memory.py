@@ -1,13 +1,6 @@
-import matplotlib.pyplot as plt
-from fontTools.t1Lib import write
-from matplotlib import cm
-
 import warp as wp
 import numpy as np
-# import pyvista as pv
-import lbm
-import os
-import time
+import lbm_mgpu
 
 
 class Memory:
@@ -36,7 +29,7 @@ class Memory:
         return fields
 
     def __init__(self,
-                 parameters: lbm.Parameters,
+                 parameters: lbm_mgpu.Parameters,
                  partitions,
                  f_0=None,
                  f_1=None,
@@ -52,7 +45,7 @@ class Memory:
         :param write:
         """
         self.params = parameters
-        self.export = lbm.Export(self.params)
+        self.export = lbm_mgpu.Export(self.params)
         self.partitions = partitions
 
         if f_0 is None:
