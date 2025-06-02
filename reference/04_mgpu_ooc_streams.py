@@ -14,9 +14,9 @@ def main():
     wp.clear_kernel_cache()
     gpus = wp.get_cuda_devices()
     if len(gpus) == 1:
-        gpus = gpus * 4
+        gpus = gpus * 2
         # Initialize the parameters
-    params = lbm_mgpu.Parameters(num_steps=600,
+    params = lbm_mgpu.Parameters(num_steps=1000,
                                  gpus=gpus,
                                  nx=1024 // 1,
                                  ny=768 // 1,
@@ -41,11 +41,11 @@ def main():
         partition.shape_with_halo[0] = partition.shape[0] + 2
         partition.shape_with_halo[1] = partition.shape[1]  # Add halo in y direction
 
-        partition.shape_green[0] = partition.shape[0]
-        partition.shape_green[1] = partition.shape[1] - 2  # Add halo in y direction
+        partition.shape_green[0] = partition.shape[0]- 2  # Add halo in y direction
+        partition.shape_green[1] = partition.shape[1]
 
-        partition.shape_red[0] = partition.shape[0]
-        partition.shape_red[1] = 2  # Add halo in y direction
+        partition.shape_red[0] = 2  # Add halo in y direction
+        partition.shape_red[1] = partition.shape[1]
 
         partitions.append(partition)
 
@@ -136,7 +136,7 @@ def main():
     ):
         # Get the global index
         it, jt = wp.tid()
-        jt = jt + 1
+        it = it + 1
         partition_index = wp.vec2i(it, jt)
         domain_index = partition_index + partition.origin
 
@@ -183,8 +183,8 @@ def main():
     ):
         # Get the global index
         it, jt = wp.tid()
-        if jt == 1:
-            jt = partition.shape[1] - 1
+        if it == 1:
+            it = partition.shape[0] - 1
         partition_index = wp.vec2i(it, jt)
         domain_index = partition_index + partition.origin
 
